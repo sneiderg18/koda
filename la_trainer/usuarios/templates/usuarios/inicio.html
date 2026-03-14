@@ -1,4 +1,31 @@
-<h1>Bienvenido a IA Trainer</h1>
-<p>Tu entrenador inteligente</p>
+{% extends 'base.html' %}
+{% block title %}Inicio — La Trainer{% endblock %}
 
-<a href="/ejercicios/">Ver ejercicios</a>
+{% block content %}
+
+<div class="hero-container">
+  <div class="hero-content">
+
+```
+<h1 class="hero-title">
+  Bienvenido a <span class="brand-highlight">La Trainer</span>
+</h1>
+
+<p class="hero-subtitle">
+  Tu entrenador inteligente
+</p>
+
+<div class="hero-buttons">
+  <a href="{% url 'registro' %}" class="btn-primary">
+    Comenzar gratis
+  </a>
+
+  <a href="{% url 'login' %}" class="btn-secondary">
+    Iniciar sesión
+  </a>
+</div>
+```
+
+  </div>
+</div>
+{% endblock %}

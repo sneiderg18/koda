@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — La Trainer{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'usuarios/css/dashboard.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<div>
+  <h1>
+    Hola, <span>{{ usuario.username }}</span> 👋
+  </h1>
+  <p>
+    {{ usuario.email }} · Miembro desde {{ usuario.date_joined|date:"d/m/Y" }}
+  </p>
+</div>
+
+<div>
+
+  <div>
+    <div>
+      Planes de entrenamiento
+    </div>
+    <div>
+      {{ usuario.planes_entrenamiento.count }}
+    </div>
+  </div>
+
+  <div>
+    <div>
+      Planes de alimentación
+    </div>
+    <div>
+      {{ usuario.planes_alimentacion.count }}
+    </div>
+  </div>
+
+  <div>
+    <div>
+      Registros de progreso
+    </div>
+    <div>
+      {{ usuario.progresos.count }}
+    </div>
+  </div>
+
+</div>
+
+<a href="{% url 'ejercicios' %}">
+  Ver ejercicios
+</a>
+
+{% endblock %}
