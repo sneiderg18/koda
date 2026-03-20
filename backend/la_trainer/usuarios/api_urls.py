@@ -14,10 +14,15 @@ urlpatterns = [
     # Ejercicios
     path('ejercicios/', api_views.EjercicioListAPIView.as_view(), name='api_ejercicios'),
 
-    # Planes
+    # Planes entrenamiento
     path('planes/entrenamiento/', api_views.PlanEntrenamientoAPIView.as_view(), name='api_planes_entrenamiento'),
+    path('planes/entrenamiento/<int:pk>/', api_views.PlanEntrenamientoDetalleAPIView.as_view(), name='api_plan_entrenamiento_detalle'),
+
+    # Planes alimentacion
     path('planes/alimentacion/', api_views.PlanAlimentacionAPIView.as_view(), name='api_planes_alimentacion'),
+    path('planes/alimentacion/<int:pk>/', api_views.PlanAlimentacionDetalleAPIView.as_view(), name='api_plan_alimentacion_detalle'),
 
     # Progreso
     path('progreso/', api_views.ProgresoAPIView.as_view(), name='api_progreso'),
+    path('progreso/<int:pk>/', api_views.ProgresoDetalleAPIView.as_view(), name='api_progreso_detalle'),
 ]
