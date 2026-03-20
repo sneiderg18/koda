@@ -48,10 +48,26 @@ class PerfilAPIView(APIView):
         return Response({'mensaje': 'Cuenta eliminada correctamente.'}, status=status.HTTP_200_OK)
 
 
-class EjercicioListAPIView(generics.ListAPIView):
+"""class EjercicioListAPIView(generics.ListAPIView):
     queryset = Ejercicio.objects.all()
     serializer_class = EjercicioSerializer
+    permission_classes = [IsAuthenticated]"""
+
+    # Ahora
+class EjercicioListAPIView(APIView):
     permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        ejercicios = Ejercicio.objects.all()
+        serializer = EjercicioSerializer(ejercicios, many=True)
+        return Response(serializer.data)
+
+    def post(self, request):
+        serializer = EjercicioSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class EjercicioDetalleAPIView(APIView):
