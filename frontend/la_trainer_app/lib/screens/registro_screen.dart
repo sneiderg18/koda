@@ -20,6 +20,18 @@ class _RegistroScreenState extends State<RegistroScreen> {
   bool _obscurePass2 = true;
   bool _loading      = false;
  
+  // Requisitos de contraseña
+  bool get _hasMinLength => _pass1Ctrl.text.length >= 8;
+  bool get _hasUppercase => _pass1Ctrl.text.contains(RegExp(r'[A-Z]'));
+  bool get _hasNumber    => _pass1Ctrl.text.contains(RegExp(r'[0-9]'));
+  bool get _hasSpecial   => _pass1Ctrl.text.contains(RegExp(r'[!@#\$%^&*(),.?":{}|<>]'));
+ 
+  @override
+  void initState() {
+    super.initState();
+    _pass1Ctrl.addListener(() => setState(() {}));
+  }
+ 
   @override
   void dispose() {
     _emailCtrl.dispose();
@@ -85,7 +97,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 8),
             child: Column(
               children: [
-                // ── Encabezado ─────────────────────────────────────────────
+                // ── Encabezado ──────────────────────────────────────────
                 const Icon(Icons.person_add_rounded,
                     size: 64, color: Color(0xFF4F6EF7)),
                 const SizedBox(height: 12),
@@ -106,7 +118,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
                 ),
                 const SizedBox(height: 28),
  
-                // ── Formulario ─────────────────────────────────────────────
+                // ── Formulario ──────────────────────────────────────────
                 Card(
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -117,6 +129,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
                     child: Form(
                       key: _formKey,
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Email
                           TextFormField(
@@ -178,11 +191,42 @@ class _RegistroScreenState extends State<RegistroScreen> {
                               if (v == null || v.isEmpty) {
                                 return 'Ingresa una contraseña';
                               }
-                              if (v.length < 6) {
-                                return 'Mínimo 6 caracteres';
+                              if (v.length < 8) {
+                                return 'Mínimo 8 caracteres';
                               }
                               return null;
                             },
+                          ),
+ 
+                          // ── Hint requisitos ─────────────────────────
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0F3FF),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: const Color(0xFFD0D8FF), width: 1),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Tu contraseña debe tener:',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                _reqRow(_hasMinLength, 'Mínimo 8 caracteres'),
+                                _reqRow(_hasUppercase, 'Al menos una letra mayúscula y una letra minuscula'),
+                                _reqRow(_hasNumber,    'Al menos 4 números'),
+                                _reqRow(_hasSpecial,   'Al menos un carácter especial (!@#\$...)'),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 14),
  
@@ -257,7 +301,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
  
                 const SizedBox(height: 20),
  
-                // ── Ir a login ─────────────────────────────────────────────
+                // ── Ir a login ──────────────────────────────────────────
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -282,6 +326,33 @@ class _RegistroScreenState extends State<RegistroScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+ 
+  /// Fila de requisito con ícono dinámico
+  Widget _reqRow(bool met, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Icon(
+            met
+                ? Icons.check_circle_rounded
+                : Icons.radio_button_unchecked_rounded,
+            size: 14,
+            color: met ? const Color(0xFF4F6EF7) : Colors.grey[400],
+          ),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 11.5,
+              color: met ? const Color(0xFF4F6EF7) : Colors.grey[500],
+              fontWeight: met ? FontWeight.w500 : FontWeight.normal,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -316,4 +387,3 @@ class _RegistroScreenState extends State<RegistroScreen> {
     );
   }
 }
- 
