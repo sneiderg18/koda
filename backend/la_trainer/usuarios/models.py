@@ -91,3 +91,24 @@ class Progreso(models.Model):
         
     def __str__(self):
         return f"{self.usuario.email} - {self.fecha}"
+
+
+class Conversacion(models.Model):
+    TIPO_CHOICES = [
+        ('plan_entrenamiento', 'Plan de entrenamiento'),
+        ('plan_alimentacion', 'Plan de alimentación'),
+        ('coach', 'Coach personal'),
+        ('seguimiento', 'Seguimiento de progreso'),
+    ]
+
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name='conversaciones')
+    tipo = models.CharField(max_length=50, choices=TIPO_CHOICES, default='coach')
+    mensaje_usuario = models.TextField()
+    respuesta_ia = models.TextField()
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha']
+
+    def __str__(self):
+        return f"{self.usuario.email} - {self.tipo} - {self.fecha}"
