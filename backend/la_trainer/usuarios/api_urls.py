@@ -13,6 +13,7 @@ urlpatterns = [
 
     # Ejercicios
     path('ejercicios/', api_views.EjercicioListAPIView.as_view(), name='api_ejercicios'),
+    path('ejercicios/<int:pk>/', api_views.EjercicioDetalleAPIView.as_view(), name='api_ejercicio_detalle'),
 
     # Planes entrenamiento
     path('planes/entrenamiento/', api_views.PlanEntrenamientoAPIView.as_view(), name='api_planes_entrenamiento'),
@@ -26,7 +27,7 @@ urlpatterns = [
     path('progreso/', api_views.ProgresoAPIView.as_view(), name='api_progreso'),
     path('progreso/<int:pk>/', api_views.ProgresoDetalleAPIView.as_view(), name='api_progreso_detalle'),
 
-    #Comidas
+    # Comidas
     path('comidas/', api_views.ComidaAPIView.as_view(), name='api_comidas'),
     path('comidas/<int:pk>/', api_views.ComidaDetalleAPIView.as_view(), name='api_comida_detalle'),
 ]
