@@ -1,15 +1,42 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
- 
+
 class AuthService {
+  static const _keyAccess = 'access_token';
+  static const _keyRefresh = 'refresh_token';
+
+  // ── GUARDAR TOKEN ──────────────────────────────────────────────────────────
+  static Future<void> saveTokens({
+    required String access,
+    required String? refresh,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyAccess, access);
+    if (refresh != null) await prefs.setString(_keyRefresh, refresh);
+  }
+
+  // ── OBTENER TOKEN DE ACCESO ────────────────────────────────────────────────
+  static Future<String?> getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyAccess);
+  }
+
+  // ── CERRAR SESIÓN ──────────────────────────────────────────────────────────
+  static Future<void> logout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyAccess);
+    await prefs.remove(_keyRefresh);
+  }
+
   // ── LOGIN ──────────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> login({
     required String email,
     required String password,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/api/login/');
- 
+
     final response = await http.post(
       uri,
       headers: {
@@ -21,10 +48,15 @@ class AuthService {
         'password': password,
       }),
     );
- 
+
     final data = jsonDecode(response.body);
- 
+
     if (response.statusCode == 200) {
+      // Guarda los tokens automáticamente
+      await saveTokens(
+        access: data['access'] ?? '',
+        refresh: data['refresh'],
+      );
       return {'success': true, 'data': data};
     } else {
       final mensaje = data['detail'] ??
@@ -34,7 +66,7 @@ class AuthService {
       return {'success': false, 'message': mensaje};
     }
   }
- 
+
   // ── REGISTRO ───────────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> registro({
     required String email,
@@ -43,7 +75,7 @@ class AuthService {
     required String password2,
   }) async {
     final uri = Uri.parse('${ApiConfig.baseUrl}/api/registro/');
- 
+
     final response = await http.post(
       uri,
       headers: {
@@ -57,13 +89,12 @@ class AuthService {
         'password2': password2,
       }),
     );
- 
+
     final data = jsonDecode(response.body);
- 
+
     if (response.statusCode == 200 || response.statusCode == 201) {
       return {'success': true, 'data': data};
     } else {
-      // Extrae el primer mensaje de error que devuelva Django
       String mensaje = 'Error al registrarse';
       if (data is Map) {
         final firstVal = data.values.firstWhere(
