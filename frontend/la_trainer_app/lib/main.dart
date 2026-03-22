@@ -16,7 +16,6 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4F6EF7)),
         useMaterial3: true,
-        fontFamily: 'Roboto',
       ),
       home: const LoginScreen(),
     );
