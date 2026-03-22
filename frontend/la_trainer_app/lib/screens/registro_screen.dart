@@ -1,327 +1,340 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
- 
+
+// ── Constantes ─────────────────────────────────────────────────────────────────
+const _kRed1       = Color(0xFFD72105);
+const _kRed2       = Color(0xFFD90B1C);
+const _kBgTop      = Color(0xFF0d0d0d);
+const _kBgBot      = Color(0xFF0F0F1E);
+const double _kImageHeight  = 160;
+const double _kImageOverlap = 50;
+
 class RegistroScreen extends StatefulWidget {
   const RegistroScreen({super.key});
- 
   @override
   State<RegistroScreen> createState() => _RegistroScreenState();
 }
- 
+
 class _RegistroScreenState extends State<RegistroScreen> {
-  final _formKey      = GlobalKey<FormState>();
-  final _emailCtrl    = TextEditingController();
-  final _usernameCtrl = TextEditingController();
-  final _pass1Ctrl    = TextEditingController();
-  final _pass2Ctrl    = TextEditingController();
- 
-  bool _obscurePass1 = true;
-  bool _obscurePass2 = true;
-  bool _loading      = false;
- 
-  // Requisitos de contraseña
+  final _formKey     = GlobalKey<FormState>();
+  final _emailCtrl   = TextEditingController();
+  final _userCtrl    = TextEditingController();
+  final _pass1Ctrl   = TextEditingController();
+  final _pass2Ctrl   = TextEditingController();
+
+  bool _obscurePass1        = true;
+  bool _obscurePass2        = true;
+  bool _loading             = false;
+  bool _showPassReqs        = false;
+
+  // ── Validaciones de contraseña ────────────────────────────────────────────────
   bool get _hasMinLength => _pass1Ctrl.text.length >= 8;
   bool get _hasUppercase => _pass1Ctrl.text.contains(RegExp(r'[A-Z]'));
+  bool get _hasLowercase => _pass1Ctrl.text.contains(RegExp(r'[a-z]'));
   bool get _hasNumber    => _pass1Ctrl.text.contains(RegExp(r'[0-9]'));
   bool get _hasSpecial   => _pass1Ctrl.text.contains(RegExp(r'[!@#\$%^&*(),.?":{}|<>]'));
- 
+
   @override
   void initState() {
     super.initState();
     _pass1Ctrl.addListener(() => setState(() {}));
   }
- 
+
   @override
   void dispose() {
-    _emailCtrl.dispose();
-    _usernameCtrl.dispose();
-    _pass1Ctrl.dispose();
-    _pass2Ctrl.dispose();
+    for (final c in [_emailCtrl, _userCtrl, _pass1Ctrl, _pass2Ctrl]) {
+      c.dispose();
+    }
     super.dispose();
   }
- 
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
- 
     setState(() => _loading = true);
- 
+
     final result = await AuthService.registro(
       email:     _emailCtrl.text.trim(),
-      username:  _usernameCtrl.text.trim(),
+      username:  _userCtrl.text.trim(),
       password1: _pass1Ctrl.text,
       password2: _pass2Ctrl.text,
     );
- 
+
     setState(() => _loading = false);
- 
     if (!mounted) return;
- 
+
     if (result['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('¡Registro exitoso!'),
-          backgroundColor: Colors.green,
-        ),
+        const SnackBar(content: Text('¡Registro exitoso!'), backgroundColor: Colors.green),
       );
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message'] ?? 'Error al registrarse'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result['message'] ?? 'Error al registrarse'),
+        backgroundColor: Colors.redAccent,
+      ));
     }
   }
- 
+
+  // ── Build ─────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: Color(0xFF1A1A2E)),
-          onPressed: () => Navigator.pop(context),
+      body: Stack(
+        children: [
+          // Fondo
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [_kBgTop, _kBgBot],
+              ),
+            ),
+          ),
+          const Positioned.fill(child: CustomPaint(painter: _SportsBgPainter())),
+          // Contenido
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+                child: SizedBox(
+                  width: 400,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    alignment: Alignment.topCenter,
+                    children: [_buildForm(), _buildHero()],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Formulario ────────────────────────────────────────────────────────────────
+  Widget _buildForm() {
+    return Padding(
+      padding: const EdgeInsets.only(top: _kImageHeight - _kImageOverlap),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [_kRed1, _kRed2],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        padding: const EdgeInsets.fromLTRB(25, 66, 28, 24),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              _buildField(
+                controller: _emailCtrl,
+                label: 'Correo electrónico',
+                icon: Icons.email_outlined,
+                keyboardType: TextInputType.emailAddress,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Ingresa tu correo';
+                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v.trim())) return 'Correo no válido';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 10),
+              _buildField(
+                controller: _userCtrl,
+                label: 'Nombre de usuario',
+                icon: Icons.alternate_email_rounded,
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Ingresa un nombre de usuario' : null,
+              ),
+              const SizedBox(height: 10),
+              _buildField(
+                controller: _pass1Ctrl,
+                label: 'Contraseña',
+                icon: Icons.lock_outline,
+                obscure: _obscurePass1,
+                onToggleObscure: () => setState(() => _obscurePass1 = !_obscurePass1),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Ingresa una contraseña';
+                  if (v.length < 8) return 'Mínimo 8 caracteres';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 8),
+              _buildPasswordRequirements(),
+              const SizedBox(height: 10),
+              _buildField(
+                controller: _pass2Ctrl,
+                label: 'Confirmar contraseña',
+                icon: Icons.lock_outline,
+                obscure: _obscurePass2,
+                onToggleObscure: () => setState(() => _obscurePass2 = !_obscurePass2),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Confirma tu contraseña';
+                  if (v != _pass1Ctrl.text) return 'Las contraseñas no coinciden';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 18),
+              _buildSubmitButton(),
+              const SizedBox(height: 10),
+              _buildLoginLink(),
+            ],
+          ),
         ),
       ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 8),
+    );
+  }
+
+  // ── Campo reutilizable ────────────────────────────────────────────────────────
+  Widget _buildField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+    bool obscure = false,
+    VoidCallback? onToggleObscure,
+    required String? Function(String?) validator,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: TextFormField(
+        controller: controller,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+        keyboardType: keyboardType,
+        obscureText: obscure,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.white.withOpacity(0.8), fontWeight: FontWeight.w500),
+          prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.8)),
+          suffixIcon: onToggleObscure != null
+              ? IconButton(
+                  icon: Icon(
+                    obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    color: Colors.white.withOpacity(0.8),
+                  ),
+                  onPressed: onToggleObscure,
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          errorStyle: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+        validator: validator,
+      ),
+    );
+  }
+
+  // ── Botón registrarse ─────────────────────────────────────────────────────────
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 50,
+      child: ElevatedButton(
+        onPressed: _loading ? null : _submit,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: _kRed1,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+        ),
+        child: _loading
+            ? const SizedBox(
+                width: 22, height: 22,
+                child: CircularProgressIndicator(color: _kRed1, strokeWidth: 2.5),
+              )
+            : const Text('Registrarse', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  // ── Link a login ──────────────────────────────────────────────────────────────
+  Widget _buildLoginLink() {
+    return Column(
+      children: [
+        const Text(
+          '¿Ya tienes cuenta?',
+          style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          width: double.infinity,
+          height: 42,
+          child: OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: Colors.white.withOpacity(0.5)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text(
+              'INICIAR SESIÓN',
+              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold, letterSpacing: 1),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Requisitos de contraseña ──────────────────────────────────────────────────
+  Widget _buildPasswordRequirements() {
+    // Lista de (cumplido, texto) para iterar limpiamente
+    final reqs = [
+      (_hasMinLength,                  'Mínimo 8 caracteres'),
+      (_hasUppercase && _hasLowercase, 'Mayúscula y minúscula'),
+      (_hasNumber,                     'Al menos un número'),
+      (_hasSpecial,                    'Carácter especial (!@#\$...)'),
+    ];
+
+    return ClipRect(
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        child: GestureDetector(
+          onTap: () => setState(() => _showPassReqs = !_showPassReqs),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white.withOpacity(0.3)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Encabezado ──────────────────────────────────────────
-                const Icon(Icons.person_add_rounded,
-                    size: 64, color: Color(0xFF4F6EF7)),
-                const SizedBox(height: 12),
-                Text(
-                  'Crear cuenta',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF1A1A2E),
-                      ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Completa tus datos para registrarte',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.copyWith(color: Colors.grey[600]),
-                ),
-                const SizedBox(height: 28),
- 
-                // ── Formulario ──────────────────────────────────────────
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Email
-                          TextFormField(
-                            controller: _emailCtrl,
-                            keyboardType: TextInputType.emailAddress,
-                            decoration: _inputDecoration(
-                              label: 'Correo electrónico',
-                              icon: Icons.email_outlined,
-                            ),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Ingresa tu correo';
-                              }
-                              if (!RegExp(r'^[^@]+@[^@]+\.[^@]+')
-                                  .hasMatch(v.trim())) {
-                                return 'Correo no válido';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 14),
- 
-                          // Username
-                          TextFormField(
-                            controller: _usernameCtrl,
-                            decoration: _inputDecoration(
-                              label: 'Nombre de usuario',
-                              icon: Icons.alternate_email_rounded,
-                            ),
-                            validator: (v) {
-                              if (v == null || v.trim().isEmpty) {
-                                return 'Ingresa un nombre de usuario';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 14),
- 
-                          // Password1
-                          TextFormField(
-                            controller: _pass1Ctrl,
-                            obscureText: _obscurePass1,
-                            decoration: _inputDecoration(
-                              label: 'Contraseña',
-                              icon: Icons.lock_outline,
-                            ).copyWith(
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePass1
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  color: Colors.grey,
-                                ),
-                                onPressed: () => setState(
-                                    () => _obscurePass1 = !_obscurePass1),
-                              ),
-                            ),
-                            validator: (v) {
-                              if (v == null || v.isEmpty) {
-                                return 'Ingresa una contraseña';
-                              }
-                              if (v.length < 8) {
-                                return 'Mínimo 8 caracteres';
-                              }
-                              return null;
-                            },
-                          ),
- 
-                          // ── Hint requisitos ─────────────────────────
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF0F3FF),
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                  color: const Color(0xFFD0D8FF), width: 1),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Tu contraseña debe tener:',
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey[700],
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                _reqRow(_hasMinLength, 'Mínimo 8 caracteres'),
-                                _reqRow(_hasUppercase, 'Al menos una letra mayúscula y una letra minuscula'),
-                                _reqRow(_hasNumber,    'Al menos 4 números'),
-                                _reqRow(_hasSpecial,   'Al menos un carácter especial (!@#\$...)'),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 14),
- 
-                          // Password2
-                          TextFormField(
-                            controller: _pass2Ctrl,
-                            obscureText: _obscurePass2,
-                            decoration: _inputDecoration(
-                              label: 'Confirmar contraseña',
-                              icon: Icons.lock_outline,
-                            ).copyWith(
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePass2
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  color: Colors.grey,
-                                ),
-                                onPressed: () => setState(
-                                    () => _obscurePass2 = !_obscurePass2),
-                              ),
-                            ),
-                            validator: (v) {
-                              if (v == null || v.isEmpty) {
-                                return 'Confirma tu contraseña';
-                              }
-                              if (v != _pass1Ctrl.text) {
-                                return 'Las contraseñas no coinciden';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 28),
- 
-                          // Botón registrarse
-                          SizedBox(
-                            width: double.infinity,
-                            height: 50,
-                            child: ElevatedButton(
-                              onPressed: _loading ? null : _submit,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF4F6EF7),
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: _loading
-                                  ? const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2.5,
-                                      ),
-                                    )
-                                  : const Text(
-                                      'Registrarse',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
- 
-                const SizedBox(height: 20),
- 
-                // ── Ir a login ──────────────────────────────────────────
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '¿Ya tienes cuenta? ',
-                      style: TextStyle(color: Colors.grey[600]),
+                    const Text(
+                      'Requisitos de contraseña',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white),
                     ),
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: const Text(
-                        'Inicia sesión',
-                        style: TextStyle(
-                          color: Color(0xFF4F6EF7),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                    Icon(
+                      _showPassReqs ? Icons.expand_less : Icons.expand_more,
+                      color: Colors.white.withOpacity(0.8),
+                      size: 20,
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                if (_showPassReqs) ...[
+                  const SizedBox(height: 8),
+                  // ✅ KISS: itera la lista en vez de llamar _reqRow 4 veces
+                  for (final (met, text) in reqs) _reqRow(met, text),
+                ],
               ],
             ),
           ),
@@ -329,61 +342,129 @@ class _RegistroScreenState extends State<RegistroScreen> {
       ),
     );
   }
- 
-  /// Fila de requisito con ícono dinámico
+
+  // ── Fila de requisito ─────────────────────────────────────────────────────────
   Widget _reqRow(bool met, String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
           Icon(
-            met
-                ? Icons.check_circle_rounded
-                : Icons.radio_button_unchecked_rounded,
+            met ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
             size: 14,
-            color: met ? const Color(0xFF4F6EF7) : Colors.grey[400],
+            color: met ? Colors.white : Colors.white60,
           ),
           const SizedBox(width: 6),
           Text(
             text,
             style: TextStyle(
               fontSize: 11.5,
-              color: met ? const Color(0xFF4F6EF7) : Colors.grey[500],
-              fontWeight: met ? FontWeight.w500 : FontWeight.normal,
+              color: Colors.white,
+              fontWeight: met ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
         ],
       ),
     );
   }
- 
-  InputDecoration _inputDecoration(
-      {required String label, required IconData icon}) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, color: const Color(0xFF4F6EF7)),
-      filled: true,
-      fillColor: const Color(0xFFF5F7FA),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey.shade200),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF4F6EF7), width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.redAccent),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+
+  // ── Hero: imagen + texto ──────────────────────────────────────────────────────
+  Widget _buildHero() {
+    return SizedBox(
+      height: _kImageHeight,
+      width: double.infinity,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          Image.asset('images/register.png', height: _kImageHeight, fit: BoxFit.contain),
+          Positioned(
+            bottom: 0,
+            child: SizedBox(
+              width: 350,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '¡CREA TU USUARIO!',
+                  style: GoogleFonts.bebasNeue(
+                    fontSize: 36,
+                    color: Colors.white,
+                    letterSpacing: 2,
+                    shadows: [
+                      Shadow(color: Colors.red[900]!, blurRadius: 10),
+                      const Shadow(color: Colors.black87, blurRadius: 6, offset: Offset(0, 2)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+// ── Fondo decorativo deportivo ─────────────────────────────────────────────────
+class _SportsBgPainter extends CustomPainter {
+  const _SportsBgPainter();
+
+  static final _stroke = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2
+    ..color = const Color(0x0AFFFFFF);
+
+  static final _thick = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 18
+    ..color = const Color(0x07FFFFFF);
+
+  @override
+  void paint(Canvas canvas, Size s) {
+    // Círculos
+    for (final (center, r) in [
+      (Offset(s.width * 0.88, s.height * 0.08), 55.0),
+      (Offset(s.width * 0.88, s.height * 0.08), 38.0),
+      (Offset(s.width * 0.1,  s.height * 0.92), 65.0),
+      (Offset(s.width * 0.1,  s.height * 0.92), 45.0),
+    ]) {
+      canvas.drawCircle(center, r, _stroke);
+    }
+
+    // Diagonales
+    canvas.drawLine(Offset(-20, s.height * 0.15), Offset(s.width * 0.40, -20), _thick);
+    canvas.drawLine(Offset(-20, s.height * 0.28), Offset(s.width * 0.55, -20), _thick);
+    canvas.drawLine(Offset(s.width + 20, s.height * 0.72), Offset(s.width * 0.55, s.height + 20), _thick);
+    canvas.drawLine(Offset(s.width + 20, s.height * 0.58), Offset(s.width * 0.38, s.height + 20), _thick);
+
+    // Arcos
+    canvas.drawArc(
+      Rect.fromCenter(center: Offset(s.width * 0.05, s.height * 0.5), width: 140, height: 140),
+      -math.pi / 2, math.pi, false, _stroke,
+    );
+    canvas.drawArc(
+      Rect.fromCenter(center: Offset(s.width * 0.95, s.height * 0.5), width: 120, height: 120),
+      math.pi / 2, math.pi, false, _stroke,
+    );
+
+    // Rombos
+    for (final pt in [
+      Offset(s.width * 0.15, s.height * 0.22),
+      Offset(s.width * 0.82, s.height * 0.45),
+      Offset(s.width * 0.25, s.height * 0.75),
+      Offset(s.width * 0.72, s.height * 0.82),
+    ]) {
+      canvas.drawPath(
+        Path()
+          ..moveTo(pt.dx, pt.dy - 22)
+          ..lineTo(pt.dx + 13, pt.dy)
+          ..lineTo(pt.dx, pt.dy + 22)
+          ..lineTo(pt.dx - 13, pt.dy)
+          ..close(),
+        _stroke,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter _) => false;
 }
