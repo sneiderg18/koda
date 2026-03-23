@@ -43,23 +43,18 @@ class AuthService {
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': 'true',
       },
-      body: jsonEncode({
-        'email': email,
-        'password': password,
-      }),
+      body: jsonEncode({'email': email, 'password': password}),
     );
 
     final data = jsonDecode(response.body);
 
     if (response.statusCode == 200) {
       // Guarda los tokens automáticamente
-      await saveTokens(
-        access: data['access'] ?? '',
-        refresh: data['refresh'],
-      );
+      await saveTokens(access: data['access'] ?? '', refresh: data['refresh']);
       return {'success': true, 'data': data};
     } else {
-      final mensaje = data['detail'] ??
+      final mensaje =
+          data['detail'] ??
           data['message'] ??
           data['error'] ??
           'Credenciales inválidas';
@@ -110,4 +105,25 @@ class AuthService {
       return {'success': false, 'message': mensaje};
     }
   }
+
+  // ── OBTENER PERFIL ─────────────────────────────────────────────────────────
+  /*static Future<Map<String, dynamic>> getPerfil() async {
+    final token = await getToken();
+    final uri = Uri.parse('${ApiConfig.baseUrl}/api/perfil/');
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': jsonDecode(response.body)};
+    }
+    return {'success': false, 'message': 'No se pudo obtener el perfil'};
+  }
+  */
 }
