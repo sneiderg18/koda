@@ -10,7 +10,7 @@ const _kRed1 = Color(0xFFD72105);
 const _kRed2 = Color(0xFFD90B1C);
 const _kBgTop = Color(0xFF0d0d0d);
 const _kBgBot = Color(0xFF0F0F1E);
-const double _kImageHeight = 200;
+const double _kImageHeight = 160;
 const double _kImageOverlap = 30;
 
 class LoginScreen extends StatefulWidget {
@@ -52,10 +52,12 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(builder: (_) => const HomeScreen()),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(result['message'] ?? 'Error al iniciar sesión'),
-        backgroundColor: Colors.redAccent,
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Error al iniciar sesión'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     }
   }
 
@@ -75,21 +77,23 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
           // Decoración deportiva
-          const Positioned.fill(child: CustomPaint(painter: _SportsBgPainter())),
+          const Positioned.fill(
+            child: CustomPaint(painter: _SportsBgPainter()),
+          ),
           // Contenido
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 60),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 60,
+                ),
                 child: SizedBox(
-                  width: 320,
+                  width: 280,
                   child: Stack(
                     clipBehavior: Clip.none,
                     alignment: Alignment.topCenter,
-                    children: [
-                      _buildForm(),
-                      _buildHero(),
-                    ],
+                    children: [_buildForm(), _buildHero()],
                   ),
                 ),
               ),
@@ -114,14 +118,17 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           borderRadius: BorderRadius.circular(20),
         ),
-        padding: const EdgeInsets.fromLTRB(28, 56, 28, 32),
+        padding: const EdgeInsets.fromLTRB(24, 56, 24, 32),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
               Text(
                 'Inicia sesión para comenzar',
-                style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 14),
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.85),
+                  fontSize: 14,
+                ),
               ),
               const SizedBox(height: 24),
               _buildField(
@@ -129,8 +136,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 label: 'Usuario',
                 icon: Icons.person_outline,
                 keyboardType: TextInputType.emailAddress,
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Ingresa tu usuario' : null,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Ingresa tu usuario'
+                    : null,
               ),
               const SizedBox(height: 16),
               _buildField(
@@ -138,7 +146,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 label: 'Contraseña',
                 icon: Icons.lock_outline,
                 obscure: _obscurePass,
-                onToggleObscure: () => setState(() => _obscurePass = !_obscurePass),
+                onToggleObscure: () =>
+                    setState(() => _obscurePass = !_obscurePass),
                 validator: (v) =>
                     (v == null || v.isEmpty) ? 'Ingresa tu contraseña' : null,
               ),
@@ -180,14 +189,19 @@ class _LoginScreenState extends State<LoginScreen> {
           suffixIcon: onToggleObscure != null
               ? IconButton(
                   icon: Icon(
-                    obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                    obscure
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
                     color: Colors.white.withOpacity(0.7),
                   ),
                   onPressed: onToggleObscure,
                 )
               : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
         ),
         validator: validator,
       ),
@@ -203,7 +217,9 @@ class _LoginScreenState extends State<LoginScreen> {
         onPressed: _loading ? null : _submit,
         style: ElevatedButton.styleFrom(
           foregroundColor: Colors.red[900],
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           elevation: 0,
         ),
         child: _loading
@@ -215,7 +231,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   strokeWidth: 2.5,
                 ),
               )
-            : const Text('Login', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            : const Text(
+                'Login',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
       ),
     );
   }
@@ -226,7 +245,11 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         const Text(
           '¿Nuevo en Koda?',
-          style: TextStyle(color: Colors.white70, fontSize: 14, fontWeight: FontWeight.w500),
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         SizedBox(
           width: double.infinity,
@@ -262,7 +285,11 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Stack(
         alignment: Alignment.bottomCenter,
         children: [
-          Image.asset('images/mask_group.png', height: _kImageHeight, fit: BoxFit.contain),
+          Image.asset(
+            'images/mask_group.png',
+            height: _kImageHeight,
+            fit: BoxFit.contain,
+          ),
           Positioned(
             bottom: 0,
             child: Text(
@@ -273,7 +300,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 letterSpacing: 2,
                 shadows: [
                   Shadow(color: Colors.red[900]!, blurRadius: 10),
-                  const Shadow(color: Colors.black87, blurRadius: 6, offset: Offset(0, 2)),
+                  const Shadow(
+                    color: Colors.black87,
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
                 ],
               ),
             ),
@@ -307,19 +338,49 @@ class _SportsBgPainter extends CustomPainter {
     canvas.drawCircle(Offset(s.width * 0.1, s.height * 0.92), 45, _stroke);
 
     // Diagonales
-    canvas.drawLine(Offset(-20, s.height * 0.15), Offset(s.width * 0.4, -20), _thick);
-    canvas.drawLine(Offset(-20, s.height * 0.28), Offset(s.width * 0.55, -20), _thick);
-    canvas.drawLine(Offset(s.width + 20, s.height * 0.72), Offset(s.width * 0.55, s.height + 20), _thick);
-    canvas.drawLine(Offset(s.width + 20, s.height * 0.58), Offset(s.width * 0.38, s.height + 20), _thick);
+    canvas.drawLine(
+      Offset(-20, s.height * 0.15),
+      Offset(s.width * 0.4, -20),
+      _thick,
+    );
+    canvas.drawLine(
+      Offset(-20, s.height * 0.28),
+      Offset(s.width * 0.55, -20),
+      _thick,
+    );
+    canvas.drawLine(
+      Offset(s.width + 20, s.height * 0.72),
+      Offset(s.width * 0.55, s.height + 20),
+      _thick,
+    );
+    canvas.drawLine(
+      Offset(s.width + 20, s.height * 0.58),
+      Offset(s.width * 0.38, s.height + 20),
+      _thick,
+    );
 
     // Arcos laterales
     canvas.drawArc(
-      Rect.fromCenter(center: Offset(s.width * 0.05, s.height * 0.5), width: 140, height: 140),
-      -math.pi / 2, math.pi, false, _stroke,
+      Rect.fromCenter(
+        center: Offset(s.width * 0.05, s.height * 0.5),
+        width: 140,
+        height: 140,
+      ),
+      -math.pi / 2,
+      math.pi,
+      false,
+      _stroke,
     );
     canvas.drawArc(
-      Rect.fromCenter(center: Offset(s.width * 0.95, s.height * 0.5), width: 120, height: 120),
-      math.pi / 2, math.pi, false, _stroke,
+      Rect.fromCenter(
+        center: Offset(s.width * 0.95, s.height * 0.5),
+        width: 120,
+        height: 120,
+      ),
+      math.pi / 2,
+      math.pi,
+      false,
+      _stroke,
     );
 
     // Rombos
