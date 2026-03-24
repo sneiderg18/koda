@@ -440,7 +440,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
                 const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
                 const SizedBox(width: 10),
                 Text(
-                  'EMPEZAR SESIÓN',
+                  'Crear ejercicio',
                   style: GoogleFonts.bebasNeue(
                     fontSize: 20,
                     color: Colors.white,

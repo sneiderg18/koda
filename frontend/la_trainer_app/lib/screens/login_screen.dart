@@ -133,7 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 24),
               _buildField(
                 controller: _emailCtrl,
-                label: 'Usuario',
+                label: 'Gmail de usuario',
                 icon: Icons.person_outline,
                 keyboardType: TextInputType.emailAddress,
                 validator: (v) => (v == null || v.trim().isEmpty)
