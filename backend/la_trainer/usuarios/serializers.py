@@ -31,7 +31,23 @@ class RegistroSerializer (serializers.ModelSerializer):
 class UsuarioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Usuario
-        fields = ('id', 'email', 'username', 'edad', 'peso', 'altura', 'objetivo', 'date_joined')
+        fields = (
+            'id', 'email', 'username',
+            # Datos básicos
+            'edad', 'peso', 'altura', 'genero',
+            # Objetivo
+            'objetivo', 'objetivo_tiempo', 'motivacion',
+            # Nivel de actividad
+            'nivel_actividad', 'dias_entrenamiento', 'tiempo_sesion',
+            'lugar_entrenamiento', 'tiene_equipo',
+            # Información médica
+            'condiciones_medicas', 'alergias', 'lesiones',
+            'restricciones_alimentarias',
+            # Hábitos
+            'comidas_por_dia', 'agua_por_dia', 'calidad_sueno', 'nivel_estres',
+            # Fechas
+            'date_joined',
+        )
         read_only_fields = ('email', 'date_joined')
 
 class EjercicioSerializer(serializers.ModelSerializer):

@@ -1,0 +1,117 @@
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+
+from .models import Conversacion, PlanEntrenamiento, PlanAlimentacion
+from .serializers import PlanEntrenamientoSerializer, PlanAlimentacionSerializer
+from . import ia_service
+
+
+class GenerarPlanEntrenamientoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            resultado = ia_service.generar_plan_entrenamiento(request.user)
+            plan = PlanEntrenamiento.objects.create(
+                usuario=request.user,
+                tipo_entrenamiento=resultado.get('tipo_entrenamiento', ''),
+                nivel=resultado.get('nivel', 'Principiante'),
+                duracion=resultado.get('duracion', 4),
+            )
+            Conversacion.objects.create(
+                usuario=request.user,
+                tipo='plan_entrenamiento',
+                mensaje_usuario='Generar plan de entrenamiento',
+                respuesta_ia=str(resultado)
+            )
+            return Response({
+                'plan': PlanEntrenamientoSerializer(plan).data,
+                'detalle': resultado
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GenerarPlanAlimentacionAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            resultado = ia_service.generar_plan_alimentacion(request.user)
+            plan = PlanAlimentacion.objects.create(
+                usuario=request.user,
+                calorias=resultado.get('calorias_diarias', 2000),
+                objetivo=resultado.get('objetivo', ''),
+            )
+            Conversacion.objects.create(
+                usuario=request.user,
+                tipo='plan_alimentacion',
+                mensaje_usuario='Generar plan de alimentación',
+                respuesta_ia=str(resultado)
+            )
+            return Response({
+                'plan': PlanAlimentacionSerializer(plan).data,
+                'detalle': resultado
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AnalizarProgresoAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            resultado = ia_service.analizar_progreso(request.user)
+            Conversacion.objects.create(
+                usuario=request.user,
+                tipo='seguimiento',
+                mensaje_usuario='Analizar progreso',
+                respuesta_ia=str(resultado)
+            )
+            return Response(resultado)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ChatCoachAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        mensaje = request.data.get('mensaje', '').strip()
+        if not mensaje:
+            return Response(
+                {'error': 'El mensaje no puede estar vacío.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            respuesta = ia_service.chat_coach(request.user, mensaje)
+            Conversacion.objects.create(
+                usuario=request.user,
+                tipo='coach',
+                mensaje_usuario=mensaje,
+                respuesta_ia=respuesta
+            )
+            return Response({'respuesta': respuesta})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class HistorialConversacionAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        tipo = request.query_params.get('tipo', None)
+        conversaciones = request.user.conversaciones.all()
+        if tipo:
+            conversaciones = conversaciones.filter(tipo=tipo)
+        data = [{
+            'id': c.id,
+            'tipo': c.tipo,
+            'mensaje_usuario': c.mensaje_usuario,
+            'respuesta_ia': c.respuesta_ia,
+            'fecha': c.fecha
+        } for c in conversaciones[:20]]
+        return Response(data)

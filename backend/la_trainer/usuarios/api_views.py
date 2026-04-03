@@ -281,3 +281,23 @@ class ProgresoDetalleAPIView(APIView):
             return Response({'error': 'Registro no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
         progreso.delete()
         return Response({'mensaje': 'Registro eliminado correctamente.'}, status=status.HTTP_200_OK)
+    
+
+class OnboardingAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        # Solo permite el onboarding si aún no lo ha completado
+        if request.user.peso and request.user.altura:
+            return Response(
+                {'error': 'El perfil básico ya fue completado. Para hacer cambios habla con el coach.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        serializer = UsuarioSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                'mensaje': '¡Perfil básico completado! El coach te hará algunas preguntas más.',
+                'usuario': serializer.data
+            })
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
