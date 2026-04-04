@@ -1,15 +1,39 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
+import '../services/auth_service.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
 import 'progress_screen.dart';
-import 'exercise_screen.dart';
-import 'food_screen.dart';
+import 'training_plan_screen.dart';
+import 'food_plan_screen.dart';
 
 const _kRed = Color(0xFFD72105);
+const _kRed2 = Color(0xFFD90B1C);
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String _username = 'Usuario';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUsername();
+  }
+
+  Future<void> _loadUsername() async {
+    final name = await AuthService.getUsername();
+    if (mounted) setState(() => _username = name);
+  }
 
   void _navigateTo(BuildContext context, Widget screen) {
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
@@ -19,6 +43,7 @@ class HomeScreen extends StatelessWidget {
     if (value == 'profile') {
       _navigateTo(context, const ProfileScreen());
     } else if (value == 'logout') {
+      AuthService.logout();
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -27,22 +52,47 @@ class HomeScreen extends StatelessWidget {
     }
   }
 
+  void _openCoachChat() {
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      transitionAnimationController: AnimationController(
+        vsync: Navigator.of(context),
+        duration: const Duration(milliseconds: 380),
+      ),
+      builder: (_) => const _CoachChatModal(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: _buildAppBar(context),
-      body: SizedBox.expand(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-          child: Column(
-            children: [
-              const SizedBox(height: 5),
-              _buildWelcomeText(),
-              Expanded(child: _buildNavigationButtons(context)),
-            ],
+      body: Stack(
+        children: [
+          SizedBox.expand(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
+              child: Column(
+                children: [
+                  const SizedBox(height: 5),
+                  _buildWelcomeText(),
+                  Expanded(child: _buildNavigationButtons(context)),
+                ],
+              ),
+            ),
           ),
-        ),
+          // Floating Coach KODA circle button
+          Positioned(
+            bottom: 24,
+            left: 0,
+            right: 0,
+            child: Center(child: _CoachFAB(onTap: _openCoachChat)),
+          ),
+        ],
       ),
     );
   }
@@ -56,7 +106,7 @@ class HomeScreen extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [_kRed, Color(0xFFD90B1C)],
+            colors: [_kRed, _kRed2],
           ),
         ),
       ),
@@ -71,25 +121,16 @@ class HomeScreen extends StatelessWidget {
       actions: [
         PopupMenuButton<String>(
           icon: const Icon(Icons.account_circle_rounded, color: Colors.white),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           position: PopupMenuPosition.under,
           onSelected: (value) => _handleMenuSelection(context, value),
           itemBuilder: (_) => [
             _buildMenuItem(
-              'profile',
-              Icons.person_outline_rounded,
-              'Perfil',
-              _kRed,
-            ),
+                'profile', Icons.person_outline_rounded, 'Perfil', _kRed),
             const PopupMenuDivider(),
-            _buildMenuItem(
-              'logout',
-              Icons.logout_rounded,
-              'Cerrar sesión',
-              Colors.redAccent,
-            ),
+            _buildMenuItem('logout', Icons.logout_rounded, 'Cerrar sesión',
+                Colors.redAccent),
           ],
         ),
       ],
@@ -97,11 +138,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   PopupMenuItem<String> _buildMenuItem(
-    String value,
-    IconData icon,
-    String text,
-    Color color,
-  ) {
+      String value, IconData icon, String text, Color color) {
     return PopupMenuItem(
       value: value,
       child: Row(
@@ -116,7 +153,7 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildWelcomeText() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF260101),
         borderRadius: BorderRadius.circular(50),
@@ -128,14 +165,16 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('👋', style: TextStyle(fontSize: 18)),
-          SizedBox(width: 10),
-          Text(
-            'Bienvenido',
-            style: TextStyle(fontSize: 18, color: Colors.white),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              'Bienvenido, $_username',
+              style: const TextStyle(fontSize: 17, color: Colors.white),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -154,18 +193,540 @@ class HomeScreen extends StatelessWidget {
         _NavAvatar(
           imagePath: 'assets/images/plan_ejercicio.png',
           label: 'Ejercicio',
-          onTap: () => _navigateTo(context, const ExerciseScreen()),
+          onTap: () => _navigateTo(context, const TrainingPlanScreen()),
         ),
         _NavAvatar(
           imagePath: 'assets/images/plan_alimentacion.png',
           label: 'Alimentación',
-          onTap: () => _navigateTo(context, const FoodScreen()),
+          onTap: () => _navigateTo(context, const FoodPlanScreen()),
         ),
       ],
     );
   }
 }
 
+// ── Botón flotante Coach KODA ─────────────────────────────────────────────────
+class _CoachFAB extends StatefulWidget {
+  final VoidCallback onTap;
+  const _CoachFAB({required this.onTap});
+
+  @override
+  State<_CoachFAB> createState() => _CoachFABState();
+}
+
+class _CoachFABState extends State<_CoachFAB>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pressCtrl;
+  late final Animation<double> _scaleAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pressCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 100),
+      reverseDuration: const Duration(milliseconds: 150),
+      lowerBound: 0.0,
+      upperBound: 1.0,
+    );
+    _scaleAnim = Tween<double>(begin: 1.0, end: 0.93).animate(
+      CurvedAnimation(parent: _pressCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pressCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onTapDown(_) => _pressCtrl.forward();
+  void _onTapUp(_) {
+    _pressCtrl.reverse();
+    widget.onTap();
+  }
+
+  void _onTapCancel() => _pressCtrl.reverse();
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: _onTapDown,
+      onTapUp: _onTapUp,
+      onTapCancel: _onTapCancel,
+      child: AnimatedBuilder(
+        animation: _scaleAnim,
+        builder: (_, child) => Transform.scale(
+          scale: _scaleAnim.value,
+          child: child,
+        ),
+        child: Container(
+          width: 62,
+          height: 62,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [_kRed, _kRed2],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: _kRed.withOpacity(0.45),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.sports_rounded,
+              color: Colors.white, size: 30),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Modal de chat con Coach KODA ──────────────────────────────────────────────
+class _CoachChatModal extends StatefulWidget {
+  const _CoachChatModal();
+
+  @override
+  State<_CoachChatModal> createState() => _CoachChatModalState();
+}
+
+class _CoachChatModalState extends State<_CoachChatModal> {
+  final _msgCtrl = TextEditingController();
+  final _scrollCtrl = ScrollController();
+  final List<_ChatMessage> _messages = [];
+  bool _isSending = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _messages.add(const _ChatMessage(
+      text:
+          '¡Hola! Soy tu coach personal 💪 ¿En qué te puedo ayudar hoy?',
+      isUser: false,
+    ));
+  }
+
+  @override
+  void dispose() {
+    _msgCtrl.dispose();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _msgCtrl.text.trim();
+    if (text.isEmpty || _isSending) return;
+
+    setState(() {
+      _messages.add(_ChatMessage(text: text, isUser: true));
+      _isSending = true;
+    });
+    _msgCtrl.clear();
+    _scrollToBottom();
+
+    try {
+      final token = await AuthService.getToken();
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/ia/coach/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'mensaje': text}),
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final reply = data['respuesta'] ??
+            data['message'] ??
+            data['response'] ??
+            'Sin respuesta';
+
+        setState(() {
+          _messages.add(_ChatMessage(text: reply.toString(), isUser: false));
+          _isSending = false;
+        });
+        _scrollToBottom();
+      } else {
+        setState(() {
+          _messages.add(const _ChatMessage(
+            text: 'Ocurrió un error. Intenta de nuevo.',
+            isUser: false,
+          ));
+          _isSending = false;
+        });
+        _scrollToBottom();
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _messages.add(const _ChatMessage(
+            text: 'Sin conexión. Verifica tu internet.',
+            isUser: false,
+          ));
+          _isSending = false;
+        });
+        _scrollToBottom();
+      }
+    }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.72,
+      minChildSize: 0.4,
+      maxChildSize: 0.92,
+      builder: (_, scrollController) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFFF5F7FA),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              _buildHandle(),
+              // Header
+              _buildHeader(context),
+              // Messages
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollCtrl,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  itemCount: _messages.length,
+                  itemBuilder: (_, i) => _BubbleTile(msg: _messages[i]),
+                ),
+              ),
+              // Typing indicator
+              if (_isSending)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: _kRed.withOpacity(0.1),
+                        child: const Icon(Icons.sports_rounded,
+                            color: _kRed, size: 14),
+                      ),
+                      const SizedBox(width: 10),
+                      const _TypingIndicator(),
+                    ],
+                  ),
+                ),
+              // Input
+              _buildInput(bottomInset),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildHandle() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      child: Container(
+        width: 40,
+        height: 4,
+        decoration: BoxDecoration(
+          color: const Color(0xFFDDDDDD),
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 8, 16, 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF5F7FA),
+        border: Border(bottom: BorderSide(color: Color(0xFFEEEEEE))),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                  colors: [_kRed, _kRed2],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                    color: _kRed.withOpacity(0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3))
+              ],
+            ),
+            child: const Icon(Icons.sports_rounded,
+                color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 12),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Coach KODA',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Color(0xFF1A1A2E))),
+              Text('Siempre disponible para ti',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+          const Spacer(),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close_rounded,
+                color: Colors.grey, size: 22),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInput(double bottomInset) {
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, 10, 16, 10 + bottomInset),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _msgCtrl,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(
+                hintText: 'Escribe tu mensaje...',
+                hintStyle:
+                    const TextStyle(color: Colors.grey, fontSize: 14),
+                filled: true,
+                fillColor: const Color(0xFFF5F7FA),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 12),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+              onSubmitted: (_) => _sendMessage(),
+            ),
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: _sendMessage,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: _isSending
+                    ? null
+                    : const LinearGradient(
+                        colors: [_kRed, _kRed2],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight),
+                color: _isSending ? Colors.grey[300] : null,
+                shape: BoxShape.circle,
+                boxShadow: _isSending
+                    ? []
+                    : [
+                        BoxShadow(
+                            color: _kRed.withOpacity(0.35),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3))
+                      ],
+              ),
+              child: const Icon(Icons.send_rounded,
+                  color: Colors.white, size: 20),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Burbuja de mensaje ────────────────────────────────────────────────────────
+class _ChatMessage {
+  final String text;
+  final bool isUser;
+  const _ChatMessage({required this.text, required this.isUser});
+}
+
+class _BubbleTile extends StatelessWidget {
+  final _ChatMessage msg;
+  const _BubbleTile({required this.msg});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment:
+            msg.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!msg.isUser) ...[
+            CircleAvatar(
+              radius: 14,
+              backgroundColor: _kRed.withOpacity(0.1),
+              child: const Icon(Icons.sports_rounded, color: _kRed, size: 14),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: msg.isUser
+                    ? const LinearGradient(
+                        colors: [_kRed, _kRed2],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight)
+                    : null,
+                color: msg.isUser ? null : Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(msg.isUser ? 18 : 4),
+                  bottomRight: Radius.circular(msg.isUser ? 4 : 18),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: msg.isUser
+                        ? _kRed.withOpacity(0.25)
+                        : Colors.black.withOpacity(0.06),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                msg.text,
+                style: TextStyle(
+                  color: msg.isUser ? Colors.white : const Color(0xFF1A1A2E),
+                  fontSize: 15,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ),
+          if (msg.isUser) ...[
+            const SizedBox(width: 8),
+            const CircleAvatar(
+              radius: 14,
+              backgroundColor: Color(0xFFEEEEEE),
+              child: Icon(Icons.person_rounded,
+                  color: Color(0xFF666666), size: 14),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Indicador de escritura animado ────────────────────────────────────────────
+class _TypingIndicator extends StatefulWidget {
+  const _TypingIndicator();
+
+  @override
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
+}
+
+class _TypingIndicatorState extends State<_TypingIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 900))
+      ..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 6,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (i) {
+          return AnimatedBuilder(
+            animation: _ctrl,
+            builder: (_, __) {
+              final offset = ((_ctrl.value * 3) - i).clamp(0.0, 1.0);
+              final bounce = offset < 0.5 ? offset * 2 : (1 - offset) * 2;
+              return Transform.translate(
+                offset: Offset(0, -4 * bounce),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(
+                    color: _kRed,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              );
+            },
+          );
+        }),
+      ),
+    );
+  }
+}
+
+// ── NavAvatar ─────────────────────────────────────────────────────────────────
 class _NavAvatar extends StatelessWidget {
   final String imagePath;
   final String label;
@@ -198,10 +759,9 @@ class _NavAvatar extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          ),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w600)),
         ],
       ),
     );

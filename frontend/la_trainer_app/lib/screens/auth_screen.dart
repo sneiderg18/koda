@@ -1,147 +1,173 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
+import '../services/auth_service.dart';
+import 'coach_screen.dart';
 
-class ExerciseScreen extends StatefulWidget {
-  const ExerciseScreen({super.key});
+class OnboardingScreen extends StatefulWidget {
+  const OnboardingScreen({super.key});
 
   @override
-  State<ExerciseScreen> createState() => _ExerciseScreenState();
+  State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _ExerciseScreenState extends State<ExerciseScreen> {
-  List<dynamic> _ejercicios = [];
-  bool _loading = true;
-  String? _error;
+class _OnboardingScreenState extends State<OnboardingScreen> {
+  final _formKey = GlobalKey<FormState>();
+  bool _isLoading = false;
+
+  final _edadCtrl          = TextEditingController();
+  final _pesoCtrl           = TextEditingController();
+  final _alturaCtrl         = TextEditingController();
+  final _objetivoTiempoCtrl = TextEditingController(); // String, ej: "bajar 5kg en 3 meses"
+  final _motivacionCtrl     = TextEditingController();
+  final _diasCtrl           = TextEditingController();
+  final _tiempoSesionCtrl   = TextEditingController();
+
+  String? _genero;
+  String? _objetivo;
+  String? _nivelActividad;
+  String? _lugarEntrenamiento;
+  String? _tieneEquipo;
+
+  static const _kRed = Color(0xFFD72105);
+
+  // ── Valores mostrados en UI → valores que espera la API ─────────────────────
+  final _generos = {
+    'Masculino': 'masculino',
+    'Femenino': 'femenino',
+    'Otro': 'otro',
+  };
+
+  final _objetivos = {
+    'Bajar de peso': 'bajar_peso',
+    'Ganar músculo': 'ganar_musculo',
+    'Mejorar resistencia': 'mejorar_resistencia',
+    'Mantener peso': 'mantener_peso',
+    'Mejorar salud general': 'mejorar_salud',
+  };
+
+  final _nivelesActividad = {
+    'Principiante': 'principiante',
+    'Ligero': 'ligero',
+    'Moderado': 'moderado',
+    'Activo': 'activo',
+    'Muy activo': 'muy_activo',
+  };
+
+  final _lugares = {
+    'Casa': 'casa',
+    'Gimnasio': 'gimnasio',
+    'Al aire libre': 'aire_libre',
+    'Mixto': 'mixto',
+  };
 
   @override
-  void initState() {
-    super.initState();
-    _fetchEjercicios();
+  void dispose() {
+    _edadCtrl.dispose();
+    _pesoCtrl.dispose();
+    _alturaCtrl.dispose();
+    _objetivoTiempoCtrl.dispose();
+    _motivacionCtrl.dispose();
+    _diasCtrl.dispose();
+    _tiempoSesionCtrl.dispose();
+    super.dispose();
   }
 
-  Future<Map<String, String>> _headers() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('access_token') ?? '';
-    return {
-      'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
-      'Authorization': 'Bearer $token',
-    };
-  }
+  Future<void> _enviar() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
 
-  // ── GET ──────────────────────────────────────────────────────────────
-  Future<void> _fetchEjercicios() async {
-    setState(() { _loading = true; _error = null; });
     try {
-      final res = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/ejercicios/'),
-        headers: await _headers(),
+      final token = await AuthService.getToken();
+
+      // Construimos el body eliminando nulls para no enviar campos vacíos
+      final Map<String, dynamic> body = {};
+
+      final edad   = int.tryParse(_edadCtrl.text.trim());
+      final peso   = double.tryParse(_pesoCtrl.text.trim());
+      final altura = double.tryParse(_alturaCtrl.text.trim());
+      final dias   = int.tryParse(_diasCtrl.text.trim());
+      final tiempo = int.tryParse(_tiempoSesionCtrl.text.trim());
+
+      if (edad   != null) body['edad']                = edad;
+      if (peso   != null) body['peso']                = peso;
+      if (altura != null) body['altura']              = altura;
+      if (dias   != null) body['dias_entrenamiento']  = dias;
+      if (tiempo != null) body['tiempo_sesion']       = tiempo;
+
+      // objetivo_tiempo es un String descriptivo, ej: "bajar 5kg en 3 meses"
+      final objTiempoStr = _objetivoTiempoCtrl.text.trim();
+      if (objTiempoStr.isNotEmpty) body['objetivo_tiempo'] = objTiempoStr;
+
+      // Usar los valores de la API (no los labels del UI)
+      if (_genero            != null) body['genero']              = _generos[_genero!]!;
+      if (_objetivo          != null) body['objetivo']            = _objetivos[_objetivo!]!;
+      if (_nivelActividad    != null) body['nivel_actividad']     = _nivelesActividad[_nivelActividad!]!;
+      if (_lugarEntrenamiento != null) body['lugar_entrenamiento'] = _lugares[_lugarEntrenamiento!]!;
+      if (_tieneEquipo       != null) body['tiene_equipo']        = _tieneEquipo == 'Sí';
+
+      final motivacion = _motivacionCtrl.text.trim();
+      if (motivacion.isNotEmpty) body['motivacion'] = motivacion;
+
+      // ── DEBUG: ver exactamente qué mandamos ───────────────────────────────
+      print('>>> ONBOARDING BODY: ${jsonEncode(body)}');
+
+      final response = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/onboarding/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(body),
       );
-      if (res.statusCode == 200) {
-        setState(() {
-          _ejercicios = jsonDecode(res.body);
-          _loading = false;
-        });
+
+      print('>>> ONBOARDING STATUS: ${response.statusCode}');
+      print('>>> ONBOARDING RESPONSE: ${response.body}');
+      // ── FIN DEBUG ─────────────────────────────────────────────────────────
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const CoachScreen()),
+        );
       } else {
-        setState(() {
-          _error = 'Error ${res.statusCode}';
-          _loading = false;
-        });
+        // Mostrar el mensaje exacto que devuelve Django
+        String errorMsg = 'Error ${response.statusCode}';
+        try {
+          final data = jsonDecode(response.body);
+          if (data is Map) {
+            errorMsg = data.entries
+                .map((e) => '${e.key}: ${e.value}')
+                .join('\n');
+          }
+        } catch (_) {
+          errorMsg = response.body;
+        }
+        _mostrarError(errorMsg);
       }
     } catch (e) {
-      setState(() { _error = 'Sin conexión: $e'; _loading = false; });
+      _mostrarError('No se pudo conectar: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // ── DELETE ───────────────────────────────────────────────────────────
-  Future<void> _eliminar(int id) async {
-    final confirm = await _showConfirmDialog();
-    if (!confirm) return;
-    try {
-      final res = await http.delete(
-        Uri.parse('${ApiConfig.baseUrl}/api/ejercicios/$id/'),
-        headers: await _headers(),
-      );
-      if (res.statusCode == 200 || res.statusCode == 204) {
-        _showSnack('Ejercicio eliminado', Colors.green);
-        _fetchEjercicios();
-      } else {
-        _showSnack('Error al eliminar: ${res.statusCode}', Colors.redAccent);
-      }
-    } catch (_) {
-      _showSnack('Sin conexión', Colors.redAccent);
-    }
-  }
-
-  // ── PUT ──────────────────────────────────────────────────────────────
-  Future<void> _actualizar(Map<String, dynamic> ejercicio) async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _EjercicioForm(
-        ejercicio: ejercicio,
-        headers: _headers,
-        onSaved: () {
-          _showSnack('Ejercicio actualizado', Colors.green);
-          _fetchEjercicios();
-        },
+  void _mostrarError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 8),
       ),
     );
-  }
-
-  // ── POST ─────────────────────────────────────────────────────────────
-  Future<void> _crear() async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _EjercicioForm(
-        headers: _headers,
-        onSaved: () {
-          _showSnack('Ejercicio creado', Colors.green);
-          _fetchEjercicios();
-        },
-      ),
-    );
-  }
-
-  Future<bool> _showConfirmDialog() async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (_) => AlertDialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
-            title: const Text('¿Eliminar ejercicio?'),
-            content: const Text('Esta acción no se puede deshacer.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancelar'),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Eliminar',
-                    style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
-  void _showSnack(String msg, Color color) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
   }
 
   @override
@@ -152,428 +178,207 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded,
-              color: Color(0xFF1A1A2E)),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: false,
         title: const Text(
-          'Ejercicios',
+          'Cuéntanos sobre ti',
           style: TextStyle(
             color: Color(0xFF1A1A2E),
             fontWeight: FontWeight.bold,
             fontSize: 20,
           ),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: Color(0xFF4F6EF7)),
-            onPressed: _fetchEjercicios,
-          ),
-        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(color: const Color(0xFFEEEEEE), height: 1),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _crear,
-        backgroundColor: const Color(0xFF4F6EF7),
-        child: const Icon(Icons.add_rounded, color: Colors.white),
-      ),
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF4F6EF7)))
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.error_outline_rounded,
-                          size: 48, color: Colors.grey),
-                      const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 32),
-                        child: Text(_error!,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.grey)),
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _fetchEjercicios,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4F6EF7),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle('Datos personales'),
+              const SizedBox(height: 16),
+              _buildRow([
+                _numField(_edadCtrl, 'Edad', Icons.cake_rounded,
+                    hint: 'Ej. 25', isInt: true),
+                _numField(_pesoCtrl, 'Peso (kg)', Icons.monitor_weight_rounded,
+                    hint: 'Ej. 70.5'),
+              ]),
+              const SizedBox(height: 12),
+              _buildRow([
+                _numField(_alturaCtrl, 'Altura (cm)', Icons.height_rounded,
+                    hint: 'Ej. 175', isInt: true),
+                _dropdown('Género', _generos.keys.toList(), _genero, Icons.person_rounded,
+                    (v) => setState(() => _genero = v)),
+              ]),
+              const SizedBox(height: 28),
+
+              _sectionTitle('Objetivos'),
+              const SizedBox(height: 16),
+              _dropdown('Objetivo principal', _objetivos.keys.toList(), _objetivo,
+                  Icons.flag_rounded, (v) => setState(() => _objetivo = v)),
+              const SizedBox(height: 12),
+              _textField(_objetivoTiempoCtrl, 'Describe tu meta', Icons.calendar_today_rounded,
+                  hint: 'Ej. Bajar 5kg en 3 meses', required: false),
+              const SizedBox(height: 12),
+              _textField(_motivacionCtrl, 'Motivación', Icons.star_rounded,
+                  hint: 'Ej. Quiero sentirme mejor', required: false),
+              const SizedBox(height: 28),
+
+              _sectionTitle('Entrenamiento'),
+              const SizedBox(height: 16),
+              _dropdown('Nivel de actividad', _nivelesActividad.keys.toList(), _nivelActividad,
+                  Icons.fitness_center_rounded,
+                  (v) => setState(() => _nivelActividad = v)),
+              const SizedBox(height: 12),
+              _buildRow([
+                _numField(_diasCtrl, 'Días/semana', Icons.event_rounded,
+                    hint: 'Ej. 4', isInt: true),
+                _numField(_tiempoSesionCtrl, 'Min/sesión', Icons.timer_rounded,
+                    hint: 'Ej. 60', isInt: true),
+              ]),
+              const SizedBox(height: 12),
+              _dropdown('Lugar de entrenamiento', _lugares.keys.toList(), _lugarEntrenamiento,
+                  Icons.place_rounded,
+                  (v) => setState(() => _lugarEntrenamiento = v)),
+              const SizedBox(height: 12),
+              _dropdown('¿Tiene equipo/pesas?', ['Sí', 'No'], _tieneEquipo,
+                  Icons.sports_gymnastics_rounded,
+                  (v) => setState(() => _tieneEquipo = v)),
+              const SizedBox(height: 40),
+
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _enviar,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _kRed,
+                    disabledBackgroundColor: _kRed.withOpacity(0.6),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    elevation: 0,
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2.5))
+                      : const Text(
+                          'Continuar',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white),
                         ),
-                        child: const Text('Reintentar',
-                            style: TextStyle(color: Colors.white)),
-                      ),
-                    ],
-                  ),
-                )
-              : _ejercicios.isEmpty
-                  ? const Center(
-                      child: Text('No hay ejercicios registrados',
-                          style: TextStyle(color: Colors.grey)))
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 20),
-                      itemCount: _ejercicios.length,
-                      separatorBuilder: (_, __) =>
-                          const SizedBox(height: 12),
-                      itemBuilder: (_, i) {
-                        final e = _ejercicios[i];
-                        return _EjercicioCard(
-                          ejercicio: e,
-                          onActualizar: () => _actualizar(e),
-                          onEliminar: () => _eliminar(e['id']),
-                        );
-                      },
-                    ),
-    );
-  }
-}
-
-// ── Card ──────────────────────────────────────────────────────────────────
-class _EjercicioCard extends StatelessWidget {
-  final Map<String, dynamic> ejercicio;
-  final VoidCallback onActualizar;
-  final VoidCallback onEliminar;
-
-  const _EjercicioCard({
-    required this.ejercicio,
-    required this.onActualizar,
-    required this.onEliminar,
-  });
-
-  // Color por grupo muscular
-  Color _grupoColor(String? grupo) {
-    switch (grupo?.toLowerCase()) {
-      case 'piernas':   return const Color(0xFF4F6EF7);
-      case 'pecho':     return const Color(0xFFFF6B6B);
-      case 'espalda':   return const Color(0xFF43C59E);
-      case 'hombros':   return const Color(0xFFFF9800);
-      case 'brazos':    return const Color(0xFF9C27B0);
-      case 'abdomen':   return const Color(0xFF00BCD4);
-      default:          return const Color(0xFF607D8B);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _grupoColor(ejercicio['grupo_muscular']);
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
+                ),
+              ),
+              const SizedBox(height: 20),
+            ],
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            // Ícono con color por grupo muscular
-            CircleAvatar(
-              radius: 26,
-              backgroundColor: color.withOpacity(0.12),
-              child: Icon(Icons.fitness_center_rounded,
-                  color: color, size: 24),
-            ),
-            const SizedBox(width: 14),
-
-            // Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    ejercicio['nombre'] ?? '—',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1A1A2E),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  // Chip grupo muscular
-                  if (ejercicio['grupo_muscular'] != null)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.10),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        ejercicio['grupo_muscular'],
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: color,
-                            fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  if ((ejercicio['descripcion'] ?? '').toString().isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      ejercicio['descripcion'],
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-
-            // Botones
-            Column(
-              children: [
-                IconButton(
-                  onPressed: onActualizar,
-                  style: IconButton.styleFrom(
-                    backgroundColor:
-                        const Color(0xFF4F6EF7).withOpacity(0.08),
-                    padding: const EdgeInsets.all(8),
-                  ),
-                  icon: const Icon(Icons.edit_rounded,
-                      color: Color(0xFF4F6EF7), size: 18),
-                ),
-                const SizedBox(height: 6),
-                IconButton(
-                  onPressed: onEliminar,
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.redAccent.withOpacity(0.08),
-                    padding: const EdgeInsets.all(8),
-                  ),
-                  icon: const Icon(Icons.delete_rounded,
-                      color: Colors.redAccent, size: 18),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Formulario BottomSheet ────────────────────────────────────────────────
-class _EjercicioForm extends StatefulWidget {
-  final Map<String, dynamic>? ejercicio;
-  final Future<Map<String, String>> Function() headers;
-  final VoidCallback onSaved;
-
-  const _EjercicioForm({
-    this.ejercicio,
-    required this.headers,
-    required this.onSaved,
-  });
-
-  @override
-  State<_EjercicioForm> createState() => _EjercicioFormState();
-}
-
-class _EjercicioFormState extends State<_EjercicioForm> {
-  final _formKey = GlobalKey<FormState>();
-  late TextEditingController _nombreCtrl;
-  late TextEditingController _grupoCtrl;
-  late TextEditingController _descCtrl;
-  late TextEditingController _videoCtrl;
-  bool _saving = false;
-
-  bool get _isEditing => widget.ejercicio != null;
-
-  final List<String> _grupos = [
-    'Piernas', 'Pecho', 'Espalda', 'Hombros', 'Brazos', 'Abdomen', 'Otro'
-  ];
-  String? _grupoSeleccionado;
-
-  @override
-  void initState() {
-    super.initState();
-    final e = widget.ejercicio;
-    _nombreCtrl = TextEditingController(text: e?['nombre']?.toString() ?? '');
-    _grupoCtrl  = TextEditingController(text: e?['grupo_muscular']?.toString() ?? '');
-    _descCtrl   = TextEditingController(text: e?['descripcion']?.toString() ?? '');
-    _videoCtrl  = TextEditingController(text: e?['video_url']?.toString() ?? '');
-    _grupoSeleccionado = e?['grupo_muscular']?.toString();
-  }
-
-  @override
-  void dispose() {
-    _nombreCtrl.dispose();
-    _grupoCtrl.dispose();
-    _descCtrl.dispose();
-    _videoCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _saving = true);
-
-    final headers = await widget.headers();
-    final body = jsonEncode({
-      'nombre':          _nombreCtrl.text.trim(),
-      'grupo_muscular':  _grupoSeleccionado ?? _grupoCtrl.text.trim(),
-      'descripcion':     _descCtrl.text.trim(),
-      'video_url':       _videoCtrl.text.trim(),
-    });
-
-    http.Response res;
-    if (_isEditing) {
-      res = await http.put(
-        Uri.parse('${ApiConfig.baseUrl}/api/ejercicios/${widget.ejercicio!['id']}/'),
-        headers: headers,
-        body: body,
-      );
-    } else {
-      res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/ejercicios/'),
-        headers: headers,
-        body: body,
-      );
-    }
-
-    if (mounted) setState(() => _saving = false);
-
-    if (res.statusCode == 200 || res.statusCode == 201) {
-      if (mounted) Navigator.pop(context);
-      widget.onSaved();
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error ${res.statusCode}: ${res.body}'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    return Container(
-      padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + bottom),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 40, height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(4)),
-              ),
-            ),
-            Text(
-              _isEditing ? 'Actualizar ejercicio' : 'Nuevo ejercicio',
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A1A2E)),
-            ),
-            const SizedBox(height: 20),
-
-            // Nombre
-            _field(_nombreCtrl, 'Nombre', Icons.fitness_center_rounded,
-                validator: (v) => v!.isEmpty ? 'Ingresa el nombre' : null),
-            const SizedBox(height: 12),
-
-            // Grupo muscular dropdown
-            DropdownButtonFormField<String>(
-              value: _grupos.contains(_grupoSeleccionado)
-                  ? _grupoSeleccionado
-                  : null,
-              decoration: _inputDeco('Grupo muscular', Icons.category_rounded),
-              items: _grupos
-                  .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                  .toList(),
-              onChanged: (v) => setState(() => _grupoSeleccionado = v),
-              validator: (v) => v == null ? 'Selecciona un grupo' : null,
-            ),
-            const SizedBox(height: 12),
-
-            // Descripción
-            _field(_descCtrl, 'Descripción', Icons.notes_rounded),
-            const SizedBox(height: 12),
-
-            // Video URL
-            _field(_videoCtrl, 'URL del video (opcional)',
-                Icons.play_circle_outline_rounded),
-            const SizedBox(height: 24),
-
-            // Botón guardar
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _saving ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F6EF7),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-                child: _saving
-                    ? const SizedBox(
-                        width: 22, height: 22,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : Text(_isEditing ? 'Actualizar' : 'Crear',
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600)),
-              ),
-            ),
-          ],
         ),
       ),
     );
   }
 
-  Widget _field(TextEditingController ctrl, String label, IconData icon,
-      {String? Function(String?)? validator}) {
+  Widget _sectionTitle(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Text(text,
+            style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1A2E))),
+      );
+
+  Widget _buildRow(List<Widget> children) {
+    final withGaps = <Widget>[];
+    for (int i = 0; i < children.length; i++) {
+      withGaps.add(Expanded(child: children[i]));
+      if (i < children.length - 1) withGaps.add(const SizedBox(width: 12));
+    }
+    return Row(children: withGaps);
+  }
+
+  Widget _numField(
+    TextEditingController ctrl,
+    String label,
+    IconData icon, {
+    String hint = '',
+    bool isInt = false,
+    bool required = true,
+  }) {
     return TextFormField(
       controller: ctrl,
-      validator: validator,
-      decoration: _inputDeco(label, icon),
+      keyboardType: isInt
+          ? TextInputType.number
+          : const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [
+        isInt
+            ? FilteringTextInputFormatter.digitsOnly
+            : FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+      ],
+      decoration: _deco(label, icon, hint),
+      validator: required
+          ? (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null
+          : null,
     );
   }
 
-  InputDecoration _inputDeco(String label, IconData icon) {
+  Widget _textField(
+    TextEditingController ctrl,
+    String label,
+    IconData icon, {
+    String hint = '',
+    bool required = true,
+  }) {
+    return TextFormField(
+      controller: ctrl,
+      decoration: _deco(label, icon, hint),
+      validator: required
+          ? (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null
+          : null,
+    );
+  }
+
+  Widget _dropdown(
+    String label,
+    List<String> items,
+    String? value,
+    IconData icon,
+    void Function(String?) onChanged,
+  ) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: _deco(label, icon, ''),
+      isExpanded: true,
+      items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
+      onChanged: onChanged,
+      validator: (v) => v == null ? 'Selecciona una opción' : null,
+    );
+  }
+
+  InputDecoration _deco(String label, IconData icon, String hint) {
     return InputDecoration(
       labelText: label,
-      prefixIcon: Icon(icon, color: const Color(0xFF4F6EF7), size: 20),
+      hintText: hint,
+      hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+      prefixIcon: Icon(icon, color: _kRed, size: 20),
       filled: true,
-      fillColor: const Color(0xFFF5F7FA),
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none),
+          borderSide: const BorderSide(color: Color(0xFFEEEEEE))),
       enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade200)),
+          borderSide: const BorderSide(color: Color(0xFFEEEEEE))),
       focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF4F6EF7), width: 1.5)),
+          borderSide: const BorderSide(color: _kRed, width: 1.5)),
       errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Colors.redAccent)),

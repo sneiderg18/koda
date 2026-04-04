@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
+import 'onboarding_screen.dart';
 import 'registro_screen.dart';
 
 // ── Constantes globales ────────────────────────────────────────────────────────
@@ -47,9 +48,16 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (result['success'] == true) {
+      // Si el login ya nos dice si el onboarding está hecho, usamos ese dato.
+      // De lo contrario (por si acaso) hacemos la consulta extra.
+      final bool onboardingDone = result['onboarding_done'] == true;
+
+      final Widget nextScreen =
+          onboardingDone ? const HomeScreen() : const OnboardingScreen();
+
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => nextScreen),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -322,22 +330,20 @@ class _SportsBgPainter extends CustomPainter {
   static final _stroke = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.2
-    ..color = const Color(0x0AFFFFFF); // blanco ~4% opacidad
+    ..color = const Color(0x0AFFFFFF);
 
   static final _thick = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 18
-    ..color = const Color(0x07FFFFFF); // blanco ~3% opacidad
+    ..color = const Color(0x07FFFFFF);
 
   @override
   void paint(Canvas canvas, Size s) {
-    // Círculos esquinas
     canvas.drawCircle(Offset(s.width * 0.88, s.height * 0.08), 55, _stroke);
     canvas.drawCircle(Offset(s.width * 0.88, s.height * 0.08), 38, _stroke);
     canvas.drawCircle(Offset(s.width * 0.1, s.height * 0.92), 65, _stroke);
     canvas.drawCircle(Offset(s.width * 0.1, s.height * 0.92), 45, _stroke);
 
-    // Diagonales
     canvas.drawLine(
       Offset(-20, s.height * 0.15),
       Offset(s.width * 0.4, -20),
@@ -359,7 +365,6 @@ class _SportsBgPainter extends CustomPainter {
       _thick,
     );
 
-    // Arcos laterales
     canvas.drawArc(
       Rect.fromCenter(
         center: Offset(s.width * 0.05, s.height * 0.5),
@@ -383,7 +388,6 @@ class _SportsBgPainter extends CustomPainter {
       _stroke,
     );
 
-    // Rombos
     for (final pt in [
       Offset(s.width * 0.15, s.height * 0.22),
       Offset(s.width * 0.82, s.height * 0.45),

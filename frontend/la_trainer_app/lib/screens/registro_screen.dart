@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
+import 'onboarding_screen.dart';  // ← NUEVO
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
 const _kRed1       = Color(0xFFD72105);
@@ -51,6 +52,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
     super.dispose();
   }
 
+  // ── LÓGICA DE REGISTRO CON REDIRECCIÓN A ONBOARDING ──────────────────────────
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
@@ -67,11 +69,22 @@ class _RegistroScreenState extends State<RegistroScreen> {
 
     if (result['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('¡Registro exitoso!'), backgroundColor: Colors.green),
+        const SnackBar(
+          content: Text('¡Registro exitoso!'),
+          backgroundColor: Colors.green,
+        ),
       );
+
+      // ── VERIFICAR si peso == null → ir a onboarding ─────────────────────────
+      final data = result['data'];
+      final peso = data?['peso'] ?? data?['user']?['peso'];
+
+      final Widget nextScreen =
+          (peso == null) ? const OnboardingScreen() : const HomeScreen();
+
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => nextScreen),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -224,21 +237,20 @@ class _RegistroScreenState extends State<RegistroScreen> {
               ? IconButton(
                   icon: Icon(
                     obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withOpacity(0.7),
                   ),
                   onPressed: onToggleObscure,
                 )
               : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          errorStyle: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
         validator: validator,
       ),
     );
   }
 
-  // ── Botón registrarse ─────────────────────────────────────────────────────────
+  // ── Botón enviar ──────────────────────────────────────────────────────────────
   Widget _buildSubmitButton() {
     return SizedBox(
       width: double.infinity,
@@ -291,7 +303,6 @@ class _RegistroScreenState extends State<RegistroScreen> {
 
   // ── Requisitos de contraseña ──────────────────────────────────────────────────
   Widget _buildPasswordRequirements() {
-    // Lista de (cumplido, texto) para iterar limpiamente
     final reqs = [
       (_hasMinLength,                  'Mínimo 8 caracteres'),
       (_hasUppercase && _hasLowercase, 'Mayúscula y minúscula'),
@@ -332,7 +343,6 @@ class _RegistroScreenState extends State<RegistroScreen> {
                 ),
                 if (_showPassReqs) ...[
                   const SizedBox(height: 8),
-                  // ✅ KISS: itera la lista en vez de llamar _reqRow 4 veces
                   for (final (met, text) in reqs) _reqRow(met, text),
                 ],
               ],
@@ -343,7 +353,6 @@ class _RegistroScreenState extends State<RegistroScreen> {
     );
   }
 
-  // ── Fila de requisito ─────────────────────────────────────────────────────────
   Widget _reqRow(bool met, String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -368,7 +377,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
     );
   }
 
-  // ── Hero: imagen + texto ──────────────────────────────────────────────────────
+  // ── Hero ──────────────────────────────────────────────────────────────────────
   Widget _buildHero() {
     return SizedBox(
       height: _kImageHeight,
@@ -420,7 +429,6 @@ class _SportsBgPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size s) {
-    // Círculos
     for (final (center, r) in [
       (Offset(s.width * 0.88, s.height * 0.08), 55.0),
       (Offset(s.width * 0.88, s.height * 0.08), 38.0),
@@ -429,14 +437,10 @@ class _SportsBgPainter extends CustomPainter {
     ]) {
       canvas.drawCircle(center, r, _stroke);
     }
-
-    // Diagonales
     canvas.drawLine(Offset(-20, s.height * 0.15), Offset(s.width * 0.40, -20), _thick);
     canvas.drawLine(Offset(-20, s.height * 0.28), Offset(s.width * 0.55, -20), _thick);
     canvas.drawLine(Offset(s.width + 20, s.height * 0.72), Offset(s.width * 0.55, s.height + 20), _thick);
     canvas.drawLine(Offset(s.width + 20, s.height * 0.58), Offset(s.width * 0.38, s.height + 20), _thick);
-
-    // Arcos
     canvas.drawArc(
       Rect.fromCenter(center: Offset(s.width * 0.05, s.height * 0.5), width: 140, height: 140),
       -math.pi / 2, math.pi, false, _stroke,
@@ -445,8 +449,6 @@ class _SportsBgPainter extends CustomPainter {
       Rect.fromCenter(center: Offset(s.width * 0.95, s.height * 0.5), width: 120, height: 120),
       math.pi / 2, math.pi, false, _stroke,
     );
-
-    // Rombos
     for (final pt in [
       Offset(s.width * 0.15, s.height * 0.22),
       Offset(s.width * 0.82, s.height * 0.45),
