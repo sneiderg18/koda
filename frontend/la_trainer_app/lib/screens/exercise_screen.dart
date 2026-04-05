@@ -400,7 +400,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
           ),
         ],
       ),
-      // ── Botón EMPEZAR SESIÓN ───────────────────────────────────────────────
+      // ── Botón Agregar ejercicios───────────────────────────────────────────────
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -440,7 +440,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
                 const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
                 const SizedBox(width: 10),
                 Text(
-                  'Crear ejercicio',
+                  'AGREGAR EJERCICIO',
                   style: GoogleFonts.bebasNeue(
                     fontSize: 20,
                     color: Colors.white,

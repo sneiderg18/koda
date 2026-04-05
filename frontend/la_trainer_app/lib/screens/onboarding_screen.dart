@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../services/auth_service.dart';
@@ -40,6 +41,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _nivelEstres;
 
   static const _kRed = Color(0xFFD72105);
+  static const _kDarkBg = Color(0xFF0A0A0F);
+  static const _kCardBg = Color(0xFF1A1A2E);
 
   final _generos = const {
     'Masculino':         'masculino',
@@ -214,21 +217,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        title: const Text(
-          'Cuéntanos sobre ti',
-          style: TextStyle(color: Color(0xFF1A1A2E), fontWeight: FontWeight.bold, fontSize: 20),
-        ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFEEEEEE), height: 1),
-        ),
-      ),
+      // ── FONDO OSCURO PARA CONTRASTE ───────────────────────────────────────
+      backgroundColor: _kDarkBg,
+      appBar: _buildAppBar(),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
         child: Form(
@@ -330,25 +321,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   (v) => setState(() => _nivelEstres = v)),
               const SizedBox(height: 40),
 
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _enviar,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _kRed,
-                    disabledBackgroundColor: _kRed.withOpacity(0.6),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    elevation: 0,
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 22, height: 22,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-                      : const Text('Continuar',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                ),
-              ),
+              // ── Botón con estilo deportivo ──────────────────────────────
+              _buildSportButton(),
               const SizedBox(height: 20),
             ],
           ),
@@ -357,10 +331,99 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  // ── AppBar con estilo deportivo ───────────────────────────────────────────
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: _kRed,
+      elevation: 0,
+      centerTitle: true,
+      automaticallyImplyLeading: false,
+      flexibleSpace: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [_kRed, Color(0xFFD90B1C)],
+          ),
+        ),
+      ),
+      title: Text(
+        'Cuentanos sobre ti',
+        style: GoogleFonts.bebasNeue(
+          fontSize: 24,
+          color: Colors.white,
+          letterSpacing: 2,
+        ),
+      ),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(color: Colors.white.withOpacity(0.2), height: 1),
+      ),
+    );
+  }
+
+  // ── Botón con efecto deportivo ────────────────────────────────────────────
+  Widget _buildSportButton() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: _kRed.withOpacity(0.4),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 52,
+        child: ElevatedButton(
+          onPressed: _isLoading ? null : _enviar,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _kRed,
+            disabledBackgroundColor: _kRed.withOpacity(0.6),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            elevation: 0,
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 22, height: 22,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+              : Text('CONTINUAR',
+                  style: GoogleFonts.bebasNeue(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1.5,
+                  )),
+        ),
+      ),
+    );
+  }
+
+  // ── Título de sección con estilo deportivo ────────────────────────────────
   Widget _sectionTitle(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 4),
-        child: Text(text,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
+        child: Row(
+          children: [
+            Container(
+              width: 4,
+              height: 20,
+              decoration: BoxDecoration(
+                color: _kRed,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(text,
+                style: GoogleFonts.bebasNeue(
+                  fontSize: 18,
+                  color: Colors.white,
+                  letterSpacing: 1,
+                )),
+          ],
+        ),
       );
 
   Widget _buildRow(List<Widget> children) {
@@ -376,6 +439,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       {String hint = '', bool isInt = false, bool required = true}) {
     return TextFormField(
       controller: ctrl,
+      style: const TextStyle(color: Colors.white),
       keyboardType: isInt ? TextInputType.number : const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
         isInt
@@ -391,6 +455,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       {String hint = '', bool required = true}) {
     return TextFormField(
       controller: ctrl,
+      style: const TextStyle(color: Colors.white),
       decoration: _deco(label, icon, hint),
       validator: required ? (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null : null,
     );
@@ -400,6 +465,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       void Function(String?) onChanged, {bool required = true}) {
     return DropdownButtonFormField<String>(
       value: value,
+      dropdownColor: _kCardBg,
+      style: const TextStyle(color: Colors.white),
       decoration: _deco(label, icon, ''),
       isExpanded: true,
       items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
@@ -412,16 +479,33 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+      hintStyle: TextStyle(color: Colors.grey[500], fontSize: 13),
+      labelStyle: TextStyle(color: Colors.grey[400], fontSize: 12),
       prefixIcon: Icon(icon, color: _kRed, size: 20),
       filled: true,
-      fillColor: Colors.white,
+      // ── Fondo oscuro para los campos ─────────────────────────────────────
+      fillColor: _kCardBg,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFEEEEEE))),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFFEEEEEE))),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _kRed, width: 1.5)),
-      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.redAccent)),
-      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Colors.redAccent, width: 1.5)),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey[800]!),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: Colors.grey[800]!),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _kRed, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+      ),
     );
   }
 }
