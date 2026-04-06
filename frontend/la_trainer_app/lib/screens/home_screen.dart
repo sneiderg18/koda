@@ -71,11 +71,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: _buildAppBar(context),
-      body: Stack(
+      body: Column(
         children: [
-          SizedBox.expand(
+          // ── Contenido principal ─────────────────────────────────────────
+          Expanded(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 100),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
               child: Column(
                 children: [
                   const SizedBox(height: 5),
@@ -85,13 +86,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          // Floating Coach KODA circle button
-          Positioned(
-            bottom: 24,
-            left: 0,
-            right: 0,
-            child: Center(child: _CoachFAB(onTap: _openCoachChat)),
-          ),
+          // ── Barra inferior — abre el chat IA ────────────────────────────
+          _CoachBottomBar(onTap: _openCoachChat),
         ],
       ),
     );
@@ -205,81 +201,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ── Botón flotante Coach KODA ─────────────────────────────────────────────────
-class _CoachFAB extends StatefulWidget {
+// ── Barra inferior — encabezado del chat IA ───────────────────────────────────
+class _CoachBottomBar extends StatelessWidget {
   final VoidCallback onTap;
-  const _CoachFAB({required this.onTap});
-
-  @override
-  State<_CoachFAB> createState() => _CoachFABState();
-}
-
-class _CoachFABState extends State<_CoachFAB>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pressCtrl;
-  late final Animation<double> _scaleAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _pressCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 100),
-      reverseDuration: const Duration(milliseconds: 150),
-      lowerBound: 0.0,
-      upperBound: 1.0,
-    );
-    _scaleAnim = Tween<double>(begin: 1.0, end: 0.93).animate(
-      CurvedAnimation(parent: _pressCtrl, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _pressCtrl.dispose();
-    super.dispose();
-  }
-
-  void _onTapDown(_) => _pressCtrl.forward();
-  void _onTapUp(_) {
-    _pressCtrl.reverse();
-    widget.onTap();
-  }
-
-  void _onTapCancel() => _pressCtrl.reverse();
+  const _CoachBottomBar({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: _onTapDown,
-      onTapUp: _onTapUp,
-      onTapCancel: _onTapCancel,
-      child: AnimatedBuilder(
-        animation: _scaleAnim,
-        builder: (_, child) => Transform.scale(
-          scale: _scaleAnim.value,
-          child: child,
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
         ),
-        child: Container(
-          width: 62,
-          height: 62,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [_kRed, _kRed2],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: _kRed.withOpacity(0.45),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: const Icon(Icons.sports_rounded,
-              color: Colors.white, size: 30),
+        // ✅ ia_chat.png se ajusta adecuadamente manteniendo la proporción
+        child: Image.asset(
+          'assets/images/ia_chat.png',
+          width: double.infinity,
+          height: MediaQuery.of(context).size.height * 0.08,
+          fit: BoxFit.contain,
         ),
       ),
     );
@@ -427,11 +368,12 @@ class _CoachChatModalState extends State<_CoachChatModal> {
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Row(
                     children: [
-                      CircleAvatar(
-                        radius: 14,
-                        backgroundColor: _kRed.withOpacity(0.1),
-                        child: const Icon(Icons.sports_rounded,
-                            color: _kRed, size: 14),
+                      // ✅ Typing indicator con ia_icon_chat.png
+                      Image.asset(
+                        'assets/images/ia_icon_chat.png',
+                        width: 28,
+                        height: 28,
+                        fit: BoxFit.contain,
                       ),
                       const SizedBox(width: 10),
                       const _TypingIndicator(),
@@ -470,24 +412,12 @@ class _CoachChatModalState extends State<_CoachChatModal> {
       ),
       child: Row(
         children: [
-          Container(
+          // ✅ Header con ia_icon_chat.png
+          Image.asset(
+            'assets/images/ia_icon_chat.png',
             width: 40,
             height: 40,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                  colors: [_kRed, _kRed2],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                    color: _kRed.withOpacity(0.35),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3))
-              ],
-            ),
-            child: const Icon(Icons.sports_rounded,
-                color: Colors.white, size: 20),
+            fit: BoxFit.contain,
           ),
           const SizedBox(width: 12),
           const Column(
@@ -598,10 +528,12 @@ class _BubbleTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!msg.isUser) ...[
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: _kRed.withOpacity(0.1),
-              child: const Icon(Icons.sports_rounded, color: _kRed, size: 14),
+            // ✅ Ícono IA en burbuja con ia_icon_chat.png
+            Image.asset(
+              'assets/images/ia_icon_chat.png',
+              width: 28,
+              height: 28,
+              fit: BoxFit.contain,
             ),
             const SizedBox(width: 8),
           ],
@@ -633,14 +565,8 @@ class _BubbleTile extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Text(
-                msg.text,
-                style: TextStyle(
-                  color: msg.isUser ? Colors.white : const Color(0xFF1A1A2E),
-                  fontSize: 15,
-                  height: 1.4,
-                ),
-              ),
+              // ✅ Soporte markdown negritas **texto**
+              child: _buildRichText(msg.text, msg.isUser),
             ),
           ),
           if (msg.isUser) ...[
@@ -655,6 +581,42 @@ class _BubbleTile extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // ✅ Convierte **texto** y *texto* en negritas reales
+  Widget _buildRichText(String text, bool isUser) {
+    final baseColor = isUser ? Colors.white : const Color(0xFF1A1A2E);
+    final spans = <InlineSpan>[];
+    final regex = RegExp(r'\*{1,2}(.+?)\*{1,2}');
+    int lastEnd = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.add(TextSpan(
+          text: text.substring(lastEnd, match.start),
+          style: TextStyle(color: baseColor, fontSize: 15, height: 1.4),
+        ));
+      }
+      spans.add(TextSpan(
+        text: match.group(1),
+        style: TextStyle(
+          color: baseColor,
+          fontSize: 15,
+          height: 1.4,
+          fontWeight: FontWeight.bold,
+        ),
+      ));
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(lastEnd),
+        style: TextStyle(color: baseColor, fontSize: 15, height: 1.4),
+      ));
+    }
+
+    return RichText(text: TextSpan(children: spans));
   }
 }
 
