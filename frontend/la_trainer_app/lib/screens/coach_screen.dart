@@ -1,417 +1,346 @@
-import 'dart:convert';
+import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import '../config/api_config.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/auth_service.dart';
-import 'home_screen.dart';
 
-class CoachScreen extends StatefulWidget {
-  const CoachScreen({super.key});
+const _kRed1  = Color(0xFFD72105);
+const _kBgTop = Color(0xFF0d0d0d);
+const _kBgBot = Color(0xFF0F0F1E);
+
+class ProfileScreen extends StatefulWidget {
+  const ProfileScreen({super.key});
 
   @override
-  State<CoachScreen> createState() => _CoachScreenState();
+  State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _CoachScreenState extends State<CoachScreen> {
-  final _msgCtrl = TextEditingController();
-  final _scrollCtrl = ScrollController();
-  final List<_ChatMessage> _messages = [];
-  bool _isSending = false;
-
-  static const _kRed = Color(0xFFD72105);
+class _ProfileScreenState extends State<ProfileScreen> {
+  Map<String, dynamic>? _perfil;
+  bool _loading = true;
+  File? _avatarFile; // imagen seleccionada localmente
 
   @override
   void initState() {
     super.initState();
-    // Mensaje inicial del coach
-    _messages.add(const _ChatMessage(
-      text:
-          '¡Hola! Soy tu coach personal 💪 Voy a hacerte algunas preguntas para personalizar tu plan. ¿Tienes alguna condición médica que deba saber?',
-      isUser: false,
-    ));
+    _loadPerfil();
   }
 
-  @override
-  void dispose() {
-    _msgCtrl.dispose();
-    _scrollCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _sendMessage() async {
-    final text = _msgCtrl.text.trim();
-    if (text.isEmpty || _isSending) return;
-
-    setState(() {
-      _messages.add(_ChatMessage(text: text, isUser: true));
-      _isSending = true;
-    });
-    _msgCtrl.clear();
-    _scrollToBottom();
-
-    try {
-      final token = await AuthService.getToken();
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/ia/coach/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({'mensaje': text}),
-      );
-
-      if (!mounted) return;
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final reply = data['respuesta'] ??
-            data['message'] ??
-            data['response'] ??
-            'Sin respuesta';
-        final done = data['completado'] == true || data['done'] == true;
-
-        setState(() {
-          _messages.add(_ChatMessage(text: reply, isUser: false));
-          _isSending = false;
-        });
-        _scrollToBottom();
-
-        if (done) {
-          await Future.delayed(const Duration(seconds: 1));
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const HomeScreen()),
-            );
-          }
-        }
-      } else {
-        setState(() {
-          _messages.add(const _ChatMessage(
-            text: 'Ocurrió un error. Intenta de nuevo.',
-            isUser: false,
-          ));
-          _isSending = false;
-        });
-        _scrollToBottom();
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _messages.add(const _ChatMessage(
-            text: 'Sin conexión. Verifica tu internet.',
-            isUser: false,
-          ));
-          _isSending = false;
-        });
-        _scrollToBottom();
-      }
+  Future<void> _loadPerfil() async {
+    final result = await AuthService.getPerfil();
+    if (mounted) {
+      setState(() {
+        _perfil = result['success'] == true ? result['data'] : {};
+        _loading = false;
+      });
     }
   }
 
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollCtrl.hasClients) {
-        _scrollCtrl.animateTo(
-          _scrollCtrl.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (picked != null && mounted) {
+      setState(() => _avatarFile = File(picked.path));
+    }
   }
 
-  void _irAlDashboard() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-    );
+  // ── Helpers para mostrar valores legibles ─────────────────────────────────
+  String _label(String key) {
+    const map = {
+      'username':          'Usuario',
+      'email':             'Correo',
+      'edad':              'Edad',
+      'peso':              'Peso',
+      'altura':            'Altura',
+      'genero':            'Género',
+      'objetivo':          'Objetivo',
+      'nivel_actividad':   'Nivel de actividad',
+    };
+    return map[key] ?? key;
+  }
+
+  String _value(String key, dynamic val) {
+    if (val == null || val.toString().isEmpty) return '—';
+    if (key == 'peso')   return '${val} kg';
+    if (key == 'altura') return '${val} m';
+    if (key == 'edad')   return '${val} años';
+    // Convierte snake_case a texto legible
+    return val.toString().replaceAll('_', ' ');
+  }
+
+  IconData _icon(String key) {
+    const map = {
+      'username':        Icons.person_outline_rounded,
+      'email':           Icons.email_outlined,
+      'edad':            Icons.cake_outlined,
+      'peso':            Icons.monitor_weight_outlined,
+      'altura':          Icons.height_rounded,
+      'genero':          Icons.wc_rounded,
+      'objetivo':        Icons.flag_outlined,
+      'nivel_actividad': Icons.fitness_center_rounded,
+    };
+    return map[key] ?? Icons.info_outline_rounded;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: _kRed.withOpacity(0.1),
-              child: const Icon(Icons.sports_rounded, color: _kRed, size: 18),
-            ),
-            const SizedBox(width: 10),
-            const Text(
-              'Coach KODA',
-              style: TextStyle(
-                color: Color(0xFF1A1A2E),
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: _irAlDashboard,
-            child: const Text(
-              'Omitir',
-              style: TextStyle(color: Colors.grey, fontSize: 14),
-            ),
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFEEEEEE), height: 1),
-        ),
-      ),
-      body: Column(
+      body: Stack(
         children: [
-          // Aviso informativo
+          // ── Fondo ──────────────────────────────────────────────────────
           Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: _kRed.withOpacity(0.07),
-            child: const Text(
-              'El coach completará tu perfil automáticamente con tus respuestas.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Color(0xFF6B2020)),
-            ),
-          ),
-
-          // Lista de mensajes
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollCtrl,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              itemCount: _messages.length,
-              itemBuilder: (_, i) => _BubbleTile(msg: _messages[i]),
-            ),
-          ),
-
-          // Indicador de escritura
-          if (_isSending)
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 14,
-                    backgroundColor: _kRed.withOpacity(0.1),
-                    child: const Icon(Icons.sports_rounded,
-                        color: _kRed, size: 14),
-                  ),
-                  const SizedBox(width: 10),
-                  const _TypingIndicator(),
-                ],
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [_kBgTop, _kBgBot],
               ),
             ),
-
-          // Input
-          _buildInput(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInput() {
-    return Container(
-      padding: EdgeInsets.fromLTRB(
-          16, 12, 16, 12 + MediaQuery.of(context).viewInsets.bottom),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _msgCtrl,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: InputDecoration(
-                hintText: 'Escribe tu respuesta...',
-                hintStyle:
-                    const TextStyle(color: Colors.grey, fontSize: 14),
-                filled: true,
-                fillColor: const Color(0xFFF5F7FA),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
+          ),
+          const Positioned.fill(
+            child: CustomPaint(painter: _SportsBgPainter()),
+          ),
+          // ── Contenido ──────────────────────────────────────────────────
+          SafeArea(
+            child: Column(
+              children: [
+                _buildTopBar(context),
+                Expanded(
+                  child: _loading
+                      ? const Center(
+                          child: CircularProgressIndicator(color: _kRed1))
+                      : _buildContent(),
                 ),
-              ),
-              onSubmitted: (_) => _sendMessage(),
-            ),
-          ),
-          const SizedBox(width: 10),
-          GestureDetector(
-            onTap: _sendMessage,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: _isSending ? Colors.grey[300] : _kRed,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.send_rounded,
-                  color: Colors.white, size: 20),
+              ],
             ),
           ),
         ],
       ),
     );
   }
-}
 
-// ── Burbuja de mensaje ─────────────────────────────────────────────────────────
-class _ChatMessage {
-  final String text;
-  final bool isUser;
-  const _ChatMessage({required this.text, required this.isUser});
-}
-
-class _BubbleTile extends StatelessWidget {
-  final _ChatMessage msg;
-  const _BubbleTile({required this.msg});
-
-  static const _kRed = Color(0xFFD72105);
-
-  @override
-  Widget build(BuildContext context) {
+  // ── Barra superior con botón atrás ────────────────────────────────────────
+  Widget _buildTopBar(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
-        mainAxisAlignment:
-            msg.isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (!msg.isUser) ...[
-            CircleAvatar(
-              radius: 14,
-              backgroundColor: _kRed.withOpacity(0.1),
-              child: const Icon(Icons.sports_rounded, color: _kRed, size: 14),
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                color: Colors.white70, size: 20),
+            onPressed: () => Navigator.pop(context),
+          ),
+          Text(
+            'PERFIL',
+            style: GoogleFonts.bebasNeue(
+              fontSize: 24,
+              color: Colors.white,
+              letterSpacing: 3,
             ),
-            const SizedBox(width: 8),
-          ],
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: msg.isUser ? _kRed : Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(18),
-                  topRight: const Radius.circular(18),
-                  bottomLeft: Radius.circular(msg.isUser ? 18 : 4),
-                  bottomRight: Radius.circular(msg.isUser ? 4 : 18),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    final username = _perfil?['username'] ?? 'Usuario';
+    final keys = ['username', 'email', 'edad', 'peso',
+                  'altura', 'genero', 'objetivo', 'nivel_actividad'];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+      child: Column(
+        children: [
+          // ── Avatar ────────────────────────────────────────────────────
+          _buildAvatar(username),
+          const SizedBox(height: 12),
+
+          // ── Nombre ────────────────────────────────────────────────────
+          Text(
+            username,
+            style: GoogleFonts.bebasNeue(
+              fontSize: 28,
+              color: Colors.white,
+              letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            _perfil?['email'] ?? '',
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.white.withOpacity(0.45),
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // ── Lista de datos ────────────────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
+            child: Column(
+              children: [
+                for (int i = 0; i < keys.length; i++) ...[
+                  _buildRow(keys[i], _perfil?[keys[i]]),
+                  if (i < keys.length - 1)
+                    Divider(
+                      height: 1,
+                      color: Colors.white.withOpacity(0.07),
+                      indent: 56,
+                    ),
                 ],
-              ),
-              child: Text(
-                msg.text,
-                style: TextStyle(
-                  color: msg.isUser ? Colors.white : const Color(0xFF1A1A2E),
-                  fontSize: 15,
-                  height: 1.4,
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+
+  // ── Avatar con botón "+" ──────────────────────────────────────────────────
+  Widget _buildAvatar(String username) {
+    return SizedBox(
+      width: 100,
+      height: 100,
+      child: Stack(
+        children: [
+          // Foto o avatar por defecto
+          CircleAvatar(
+            radius: 50,
+            backgroundColor: _kRed1.withOpacity(0.2),
+            backgroundImage:
+                _avatarFile != null ? FileImage(_avatarFile!) : null,
+            child: _avatarFile == null
+                ? Text(
+                    username.isNotEmpty
+                        ? username[0].toUpperCase()
+                        : '?',
+                    style: GoogleFonts.bebasNeue(
+                      fontSize: 40,
+                      color: Colors.white,
+                    ),
+                  )
+                : null,
+          ),
+          // Botón "+"
+          Positioned(
+            bottom: 2,
+            right: 2,
+            child: GestureDetector(
+              onTap: _pickImage,
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: _kRed1,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: const Color(0xFF0d0d0d), width: 2),
                 ),
+                child: const Icon(Icons.add_rounded,
+                    color: Colors.white, size: 16),
               ),
             ),
           ),
-          if (msg.isUser) ...[
-            const SizedBox(width: 8),
-            const CircleAvatar(
-              radius: 14,
-              backgroundColor: Color(0xFFEEEEEE),
-              child: Icon(Icons.person_rounded,
-                  color: Color(0xFF666666), size: 14),
-            ),
-          ],
         ],
       ),
     );
   }
-}
 
-// ── Indicador de escritura animado ─────────────────────────────────────────────
-class _TypingIndicator extends StatefulWidget {
-  const _TypingIndicator();
-
-  @override
-  State<_TypingIndicator> createState() => _TypingIndicatorState();
-}
-
-class _TypingIndicatorState extends State<_TypingIndicator>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 900))
-      ..repeat();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 6,
-              offset: const Offset(0, 2))
-        ],
-      ),
+  // ── Fila de dato ──────────────────────────────────────────────────────────
+  Widget _buildRow(String key, dynamic val) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(3, (i) {
-          return AnimatedBuilder(
-            animation: _ctrl,
-            builder: (_, __) {
-              final offset =
-                  ((_ctrl.value * 3) - i).clamp(0.0, 1.0);
-              final bounce = offset < 0.5 ? offset * 2 : (1 - offset) * 2;
-              return Transform.translate(
-                offset: Offset(0, -4 * bounce),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  width: 7,
-                  height: 7,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFD72105),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              );
-            },
-          );
-        }),
+        children: [
+          Icon(_icon(key), color: _kRed1, size: 20),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              _label(key),
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.white.withOpacity(0.5),
+              ),
+            ),
+          ),
+          Text(
+            _value(key, val),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
   }
+}
+
+// ── Fondo deportivo (mismo que login/registro) ─────────────────────────────
+class _SportsBgPainter extends CustomPainter {
+  const _SportsBgPainter();
+
+  static final _stroke = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2
+    ..color = const Color(0x0AFFFFFF);
+
+  static final _thick = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 18
+    ..color = const Color(0x07FFFFFF);
+
+  @override
+  void paint(Canvas canvas, Size s) {
+    for (final (c, r) in [
+      (Offset(s.width * 0.88, s.height * 0.08), 55.0),
+      (Offset(s.width * 0.88, s.height * 0.08), 38.0),
+      (Offset(s.width * 0.1,  s.height * 0.92), 65.0),
+      (Offset(s.width * 0.1,  s.height * 0.92), 45.0),
+    ]) { canvas.drawCircle(c, r, _stroke); }
+
+    canvas.drawLine(Offset(-20, s.height * 0.15), Offset(s.width * 0.40, -20), _thick);
+    canvas.drawLine(Offset(-20, s.height * 0.28), Offset(s.width * 0.55, -20), _thick);
+    canvas.drawLine(Offset(s.width + 20, s.height * 0.72), Offset(s.width * 0.55, s.height + 20), _thick);
+    canvas.drawLine(Offset(s.width + 20, s.height * 0.58), Offset(s.width * 0.38, s.height + 20), _thick);
+
+    canvas.drawArc(
+      Rect.fromCenter(center: Offset(s.width * 0.05, s.height * 0.5), width: 140, height: 140),
+      -math.pi / 2, math.pi, false, _stroke,
+    );
+    canvas.drawArc(
+      Rect.fromCenter(center: Offset(s.width * 0.95, s.height * 0.5), width: 120, height: 120),
+      math.pi / 2, math.pi, false, _stroke,
+    );
+
+    for (final pt in [
+      Offset(s.width * 0.15, s.height * 0.22),
+      Offset(s.width * 0.82, s.height * 0.45),
+      Offset(s.width * 0.25, s.height * 0.75),
+      Offset(s.width * 0.72, s.height * 0.82),
+    ]) {
+      canvas.drawPath(
+        Path()
+          ..moveTo(pt.dx, pt.dy - 22)
+          ..lineTo(pt.dx + 13, pt.dy)
+          ..lineTo(pt.dx, pt.dy + 22)
+          ..lineTo(pt.dx - 13, pt.dy)
+          ..close(),
+        _stroke,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter _) => false;
 }

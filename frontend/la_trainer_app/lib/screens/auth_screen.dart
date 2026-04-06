@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../services/auth_service.dart';
-import 'coach_screen.dart';
+import 'home_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -17,13 +17,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
-  final _edadCtrl          = TextEditingController();
-  final _pesoCtrl           = TextEditingController();
-  final _alturaCtrl         = TextEditingController();
-  final _objetivoTiempoCtrl = TextEditingController(); // String, ej: "bajar 5kg en 3 meses"
-  final _motivacionCtrl     = TextEditingController();
-  final _diasCtrl           = TextEditingController();
-  final _tiempoSesionCtrl   = TextEditingController();
+  final _edadCtrl = TextEditingController();
+  final _pesoCtrl = TextEditingController();
+  final _alturaCtrl = TextEditingController();
+  final _objetivoTiempoCtrl =
+      TextEditingController(); // String, ej: "bajar 5kg en 3 meses"
+  final _motivacionCtrl = TextEditingController();
+  final _diasCtrl = TextEditingController();
+  final _tiempoSesionCtrl = TextEditingController();
 
   String? _genero;
   String? _objetivo;
@@ -85,28 +86,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       // Construimos el body eliminando nulls para no enviar campos vacíos
       final Map<String, dynamic> body = {};
 
-      final edad   = int.tryParse(_edadCtrl.text.trim());
-      final peso   = double.tryParse(_pesoCtrl.text.trim());
+      final edad = int.tryParse(_edadCtrl.text.trim());
+      final peso = double.tryParse(_pesoCtrl.text.trim());
       final altura = double.tryParse(_alturaCtrl.text.trim());
-      final dias   = int.tryParse(_diasCtrl.text.trim());
+      final dias = int.tryParse(_diasCtrl.text.trim());
       final tiempo = int.tryParse(_tiempoSesionCtrl.text.trim());
 
-      if (edad   != null) body['edad']                = edad;
-      if (peso   != null) body['peso']                = peso;
-      if (altura != null) body['altura']              = altura;
-      if (dias   != null) body['dias_entrenamiento']  = dias;
-      if (tiempo != null) body['tiempo_sesion']       = tiempo;
+      if (edad != null) body['edad'] = edad;
+      if (peso != null) body['peso'] = peso;
+      if (altura != null) body['altura'] = altura;
+      if (dias != null) body['dias_entrenamiento'] = dias;
+      if (tiempo != null) body['tiempo_sesion'] = tiempo;
 
       // objetivo_tiempo es un String descriptivo, ej: "bajar 5kg en 3 meses"
       final objTiempoStr = _objetivoTiempoCtrl.text.trim();
       if (objTiempoStr.isNotEmpty) body['objetivo_tiempo'] = objTiempoStr;
 
       // Usar los valores de la API (no los labels del UI)
-      if (_genero            != null) body['genero']              = _generos[_genero!]!;
-      if (_objetivo          != null) body['objetivo']            = _objetivos[_objetivo!]!;
-      if (_nivelActividad    != null) body['nivel_actividad']     = _nivelesActividad[_nivelActividad!]!;
-      if (_lugarEntrenamiento != null) body['lugar_entrenamiento'] = _lugares[_lugarEntrenamiento!]!;
-      if (_tieneEquipo       != null) body['tiene_equipo']        = _tieneEquipo == 'Sí';
+      if (_genero != null) body['genero'] = _generos[_genero!]!;
+      if (_objetivo != null) body['objetivo'] = _objetivos[_objetivo!]!;
+      if (_nivelActividad != null)
+        body['nivel_actividad'] = _nivelesActividad[_nivelActividad!]!;
+      if (_lugarEntrenamiento != null)
+        body['lugar_entrenamiento'] = _lugares[_lugarEntrenamiento!]!;
+      if (_tieneEquipo != null) body['tiene_equipo'] = _tieneEquipo == 'Sí';
 
       final motivacion = _motivacionCtrl.text.trim();
       if (motivacion.isNotEmpty) body['motivacion'] = motivacion;
@@ -133,7 +136,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const CoachScreen()),
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
         );
       } else {
         // Mostrar el mensaje exacto que devuelve Django
@@ -202,52 +205,108 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               _sectionTitle('Datos personales'),
               const SizedBox(height: 16),
               _buildRow([
-                _numField(_edadCtrl, 'Edad', Icons.cake_rounded,
-                    hint: 'Ej. 25', isInt: true),
-                _numField(_pesoCtrl, 'Peso (kg)', Icons.monitor_weight_rounded,
-                    hint: 'Ej. 70.5'),
+                _numField(
+                  _edadCtrl,
+                  'Edad',
+                  Icons.cake_rounded,
+                  hint: 'Ej. 25',
+                  isInt: true,
+                ),
+                _numField(
+                  _pesoCtrl,
+                  'Peso (kg)',
+                  Icons.monitor_weight_rounded,
+                  hint: 'Ej. 70.5',
+                ),
               ]),
               const SizedBox(height: 12),
               _buildRow([
-                _numField(_alturaCtrl, 'Altura (cm)', Icons.height_rounded,
-                    hint: 'Ej. 175', isInt: true),
-                _dropdown('Género', _generos.keys.toList(), _genero, Icons.person_rounded,
-                    (v) => setState(() => _genero = v)),
+                _numField(
+                  _alturaCtrl,
+                  'Altura (cm)',
+                  Icons.height_rounded,
+                  hint: 'Ej. 175',
+                  isInt: true,
+                ),
+                _dropdown(
+                  'Género',
+                  _generos.keys.toList(),
+                  _genero,
+                  Icons.person_rounded,
+                  (v) => setState(() => _genero = v),
+                ),
               ]),
               const SizedBox(height: 28),
 
               _sectionTitle('Objetivos'),
               const SizedBox(height: 16),
-              _dropdown('Objetivo principal', _objetivos.keys.toList(), _objetivo,
-                  Icons.flag_rounded, (v) => setState(() => _objetivo = v)),
+              _dropdown(
+                'Objetivo principal',
+                _objetivos.keys.toList(),
+                _objetivo,
+                Icons.flag_rounded,
+                (v) => setState(() => _objetivo = v),
+              ),
               const SizedBox(height: 12),
-              _textField(_objetivoTiempoCtrl, 'Describe tu meta', Icons.calendar_today_rounded,
-                  hint: 'Ej. Bajar 5kg en 3 meses', required: false),
+              _textField(
+                _objetivoTiempoCtrl,
+                'Describe tu meta',
+                Icons.calendar_today_rounded,
+                hint: 'Ej. Bajar 5kg en 3 meses',
+                required: false,
+              ),
               const SizedBox(height: 12),
-              _textField(_motivacionCtrl, 'Motivación', Icons.star_rounded,
-                  hint: 'Ej. Quiero sentirme mejor', required: false),
+              _textField(
+                _motivacionCtrl,
+                'Motivación',
+                Icons.star_rounded,
+                hint: 'Ej. Quiero sentirme mejor',
+                required: false,
+              ),
               const SizedBox(height: 28),
 
               _sectionTitle('Entrenamiento'),
               const SizedBox(height: 16),
-              _dropdown('Nivel de actividad', _nivelesActividad.keys.toList(), _nivelActividad,
-                  Icons.fitness_center_rounded,
-                  (v) => setState(() => _nivelActividad = v)),
+              _dropdown(
+                'Nivel de actividad',
+                _nivelesActividad.keys.toList(),
+                _nivelActividad,
+                Icons.fitness_center_rounded,
+                (v) => setState(() => _nivelActividad = v),
+              ),
               const SizedBox(height: 12),
               _buildRow([
-                _numField(_diasCtrl, 'Días/semana', Icons.event_rounded,
-                    hint: 'Ej. 4', isInt: true),
-                _numField(_tiempoSesionCtrl, 'Min/sesión', Icons.timer_rounded,
-                    hint: 'Ej. 60', isInt: true),
+                _numField(
+                  _diasCtrl,
+                  'Días/semana',
+                  Icons.event_rounded,
+                  hint: 'Ej. 4',
+                  isInt: true,
+                ),
+                _numField(
+                  _tiempoSesionCtrl,
+                  'Min/sesión',
+                  Icons.timer_rounded,
+                  hint: 'Ej. 60',
+                  isInt: true,
+                ),
               ]),
               const SizedBox(height: 12),
-              _dropdown('Lugar de entrenamiento', _lugares.keys.toList(), _lugarEntrenamiento,
-                  Icons.place_rounded,
-                  (v) => setState(() => _lugarEntrenamiento = v)),
+              _dropdown(
+                'Lugar de entrenamiento',
+                _lugares.keys.toList(),
+                _lugarEntrenamiento,
+                Icons.place_rounded,
+                (v) => setState(() => _lugarEntrenamiento = v),
+              ),
               const SizedBox(height: 12),
-              _dropdown('¿Tiene equipo/pesas?', ['Sí', 'No'], _tieneEquipo,
-                  Icons.sports_gymnastics_rounded,
-                  (v) => setState(() => _tieneEquipo = v)),
+              _dropdown(
+                '¿Tiene equipo/pesas?',
+                ['Sí', 'No'],
+                _tieneEquipo,
+                Icons.sports_gymnastics_rounded,
+                (v) => setState(() => _tieneEquipo = v),
+              ),
               const SizedBox(height: 40),
 
               SizedBox(
@@ -259,7 +318,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     backgroundColor: _kRed,
                     disabledBackgroundColor: _kRed.withOpacity(0.6),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 0,
                   ),
                   child: _isLoading
@@ -267,13 +327,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           width: 22,
                           height: 22,
                           child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2.5))
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
                       : const Text(
                           'Continuar',
                           style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white),
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                 ),
               ),
@@ -286,13 +350,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _sectionTitle(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Text(text,
-            style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A2E))),
-      );
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFF1A1A2E),
+      ),
+    ),
+  );
 
   Widget _buildRow(List<Widget> children) {
     final withGaps = <Widget>[];
@@ -355,7 +422,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       value: value,
       decoration: _deco(label, icon, ''),
       isExpanded: true,
-      items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
+      items: items
+          .map((i) => DropdownMenuItem(value: i, child: Text(i)))
+          .toList(),
       onChanged: onChanged,
       validator: (v) => v == null ? 'Selecciona una opción' : null,
     );
@@ -371,20 +440,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFEEEEEE))),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+      ),
       enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFFEEEEEE))),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFEEEEEE)),
+      ),
       focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _kRed, width: 1.5)),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _kRed, width: 1.5),
+      ),
       errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent)),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent),
+      ),
       focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.redAccent, width: 1.5)),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+      ),
     );
   }
 }

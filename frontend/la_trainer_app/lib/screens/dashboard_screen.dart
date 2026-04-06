@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../services/auth_service.dart';
-import 'coach_screen.dart';
+import 'home_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -109,7 +109,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             tooltip: 'Hablar con el coach',
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const CoachScreen()),
+              MaterialPageRoute(builder: (_) => const HomeScreen()),
             ),
           ),
         ],

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../services/auth_service.dart';
 import 'coach_screen.dart';
+import 'home_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -180,7 +181,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         await AuthService.setOnboardingDone();
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const CoachScreen()),
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
         );
       } else {
         String errorMsg = 'Error ${response.statusCode}';
