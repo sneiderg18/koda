@@ -4,9 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 
 class AuthService {
-  static const _keyAccess    = 'access_token';
-  static const _keyRefresh   = 'refresh_token';
-  static const _keyUsername  = 'username';
+  static const _keyAccess = 'access_token';
+  static const _keyRefresh = 'refresh_token';
+  static const _keyUsername = 'username';
   // Nueva clave: guardamos si el onboarding fue completado
   static const _keyOnboarding = 'onboarding_done';
 
@@ -142,11 +142,7 @@ class AuthService {
         await saveUsername(email.split('@').first);
       }
 
-      return {
-        'success': true,
-        'data': data,
-        'onboarding_done': onboardingDone,
-      };
+      return {'success': true, 'data': data, 'onboarding_done': onboardingDone};
     } else {
       final mensaje =
           data['detail'] ??
@@ -207,5 +203,25 @@ class AuthService {
       }
       return {'success': false, 'message': mensaje};
     }
+  }
+
+  // ── OBTENER PERFIL ─────────────────────────────────────────────────────────
+  static Future<Map<String, dynamic>> getPerfil() async {
+    final token = await AuthService.getToken();
+    final uri = Uri.parse('${ApiConfig.baseUrl}/api/perfil/');
+
+    final response = await http.get(
+      uri,
+      headers: {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return {'success': true, 'data': jsonDecode(response.body)};
+    }
+    return {'success': false, 'message': 'No se pudo obtener el perfil'};
   }
 }

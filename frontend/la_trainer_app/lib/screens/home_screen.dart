@@ -336,14 +336,14 @@ class _CoachChatModalState extends State<_CoachChatModal> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.72,
-      minChildSize: 0.4,
-      maxChildSize: 0.92,
+      initialChildSize: 1,
+      minChildSize: 1,
+      maxChildSize: 1,
       builder: (_, scrollController) {
         return Container(
           decoration: const BoxDecoration(
             color: Color(0xFFF5F7FA),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
           ),
           child: Column(
             children: [
