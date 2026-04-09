@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Usuario, PlanEntrenamiento, Ejercicio, PlanAlimentacion, Comida, Progreso
+from .models import Usuario, PlanEntrenamiento, Ejercicio, PlanAlimentacion, Comida, Progreso, Conversacion
 
 
 @admin.register(Usuario)
@@ -10,6 +10,13 @@ class UsuarioAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
         ('Información física', {'fields': ('edad', 'peso', 'altura', 'objetivo')}),
     )
+
+
+@admin.register(Conversacion)
+class ConversacionAdmin(admin.ModelAdmin):
+    list_display = ('usuario', 'tipo', 'fecha')
+    list_filter = ('tipo',)
+    ordering = ('-fecha',)
 
 
 admin.site.register(PlanEntrenamiento)
