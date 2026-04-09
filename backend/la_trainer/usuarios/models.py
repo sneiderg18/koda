@@ -166,3 +166,22 @@ class Conversacion(models.Model):
 
     def __str__(self):
         return f"{self.usuario.email} - {self.tipo} - {self.fecha}"
+    
+class RutinaEjercicio(models.Model):
+    plan = models.ForeignKey(
+        PlanEntrenamiento,
+        on_delete=models.CASCADE,
+        related_name='rutina_ejercicios'
+    )
+    nombre = models.CharField(max_length=100)
+    grupo_muscular = models.CharField(max_length=100)
+    series = models.PositiveIntegerField()
+    repeticiones = models.PositiveIntegerField()
+    descanso = models.CharField(max_length=50, help_text="Ej: 60 segundos")
+    orden = models.PositiveIntegerField(default=1, help_text="Orden en la rutina")
+
+    class Meta:
+        ordering = ['orden']
+
+    def __str__(self):
+        return f"{self.nombre} - Plan {self.plan.pk}"
