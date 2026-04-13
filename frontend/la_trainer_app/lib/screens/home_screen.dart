@@ -212,7 +212,7 @@ class _CoachBottomBar extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        // ✅ Centrado perfecto del contenido
+        // ✅ Centrado por Del pinche boton de la IA
         child: Transform.translate(
           offset: const Offset(6, 0),
           child: Image.asset(
