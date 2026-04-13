@@ -207,14 +207,14 @@ class _CoachBottomBar extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
-        ),
-        child: Image.asset(
-          'assets/images/ia_chat.png',
-          width: double.infinity,
-          height: MediaQuery.of(context).size.height * 0.08,
-          fit: BoxFit.contain,
+        // ✅ Centrado por Del pinche boton de la IA
+        child: Transform.translate(
+          offset: const Offset(6, 0),
+          child: Image.asset(
+            'assets/images/ia_chat.png',
+            height: MediaQuery.of(context).size.height * 0.08,
+            fit: BoxFit.contain,
+          ),
         ),
       ),
     );
