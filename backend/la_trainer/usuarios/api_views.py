@@ -4,11 +4,11 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Ejercicio, PlanEntrenamiento, PlanAlimentacion, Progreso, Comida
+from .models import Ejercicio, PlanEntrenamiento, PlanAlimentacion, Progreso, Comida, RutinaEjercicio
 from .serializers import (
     RegistroSerializer, UsuarioSerializer, EjercicioSerializer,
     PlanEntrenamientoSerializer, PlanAlimentacionSerializer,
-    ComidaSerializer, ProgresoSerializer
+    ComidaSerializer, ProgresoSerializer, RutinaEjercicioSerializer
 )
 
 
@@ -301,3 +301,19 @@ class OnboardingAPIView(APIView):
                 'usuario': serializer.data
             })
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class RutinaEjercicioAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            plan = PlanEntrenamiento.objects.get(pk=pk, usuario=request.user)
+            serializer = RutinaEjercicioSerializer(
+                plan.rutina_ejercicios.all(), many=True
+            )
+            return Response(serializer.data)
+        except PlanEntrenamiento.DoesNotExist:
+            return Response(
+                {'error': 'Plan no encontrado.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
