@@ -3,8 +3,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
-from .models import Conversacion, PlanEntrenamiento, PlanAlimentacion
-from .serializers import PlanEntrenamientoSerializer, PlanAlimentacionSerializer
+from .models import Conversacion, PlanEntrenamiento, PlanAlimentacion, RutinaEjercicio
+from .serializers import PlanEntrenamientoSerializer, PlanAlimentacionSerializer, ConversacionSerializer
+
 from . import ia_service
 
 
@@ -14,24 +15,46 @@ class GenerarPlanEntrenamientoAPIView(APIView):
     def post(self, request):
         try:
             resultado = ia_service.generar_plan_entrenamiento(request.user)
+            
+            # Crear el plan
             plan = PlanEntrenamiento.objects.create(
                 usuario=request.user,
                 tipo_entrenamiento=resultado.get('tipo_entrenamiento', ''),
                 nivel=resultado.get('nivel', 'Principiante'),
                 duracion=resultado.get('duracion', 4),
             )
+
+            # Guardar cada ejercicio de la rutina en DB
+            ejercicios = resultado.get('ejercicios', [])
+            for index, ejercicio in enumerate(ejercicios):
+                RutinaEjercicio.objects.create(
+                    plan=plan,
+                    nombre=ejercicio.get('nombre', ''),
+                    grupo_muscular=ejercicio.get('grupo_muscular', ''),
+                    series=ejercicio.get('series', 3),
+                    repeticiones=ejercicio.get('repeticiones', 10),
+                    descanso=ejercicio.get('descanso', '60 segundos'),
+                    orden=index + 1
+                )
+
+            # Guardar conversacion
             Conversacion.objects.create(
                 usuario=request.user,
                 tipo='plan_entrenamiento',
                 mensaje_usuario='Generar plan de entrenamiento',
                 respuesta_ia=str(resultado)
             )
+
             return Response({
                 'plan': PlanEntrenamientoSerializer(plan).data,
                 'detalle': resultado
             }, status=status.HTTP_201_CREATED)
+
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class GenerarPlanAlimentacionAPIView(APIView):
@@ -115,3 +138,17 @@ class HistorialConversacionAPIView(APIView):
             'fecha': c.fecha
         } for c in conversaciones[:20]]
         return Response(data)
+    
+
+class HistorialConversacionAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        tipo = request.query_params.get('tipo', None)
+        conversaciones = request.user.conversaciones.all()
+        if tipo:
+            conversaciones = conversaciones.filter(tipo=tipo)
+        serializer = ConversacionSerializer(conversaciones[:20], many=True)
+        return Response(serializer.data)
+    
+    

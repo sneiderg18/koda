@@ -1,9 +1,8 @@
-import 'dart:async';
-import 'dart:html' as html;
+import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/auth_service.dart';
 
 const _kRed1  = Color(0xFFD72105);
@@ -20,7 +19,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _perfil;
   bool _loading = true;
-  Uint8List? _avatarBytes; // ✅ web-compatible
+  File? _avatarFile;
 
   @override
   void initState() {
@@ -39,30 +38,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _pickImage() async {
-    final completer = Completer<Uint8List?>();
-
-    // ✅ Input HTML nativo — funciona en Flutter Web sin plugins
-    final input = html.FileUploadInputElement()
-      ..accept = 'image/*'
-      ..click();
-
-    input.onChange.listen((event) {
-      final file = input.files?.first;
-      if (file == null) {
-        completer.complete(null);
-        return;
-      }
-      final reader = html.FileReader();
-      reader.readAsArrayBuffer(file);
-      reader.onLoad.listen((_) {
-        completer.complete(reader.result as Uint8List);
-      });
-      reader.onError.listen((_) => completer.complete(null));
-    });
-
-    final bytes = await completer.future;
-    if (bytes != null && mounted) {
-      setState(() => _avatarBytes = bytes);
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (picked != null && mounted) {
+      setState(() => _avatarFile = File(picked.path));
     }
   }
 
@@ -228,11 +210,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           CircleAvatar(
             radius: 50,
             backgroundColor: _kRed1.withOpacity(0.2),
-            // ✅ MemoryImage funciona en web, móvil y desktop
-            backgroundImage: _avatarBytes != null
-                ? MemoryImage(_avatarBytes!)
-                : null,
-            child: _avatarBytes == null
+            backgroundImage:
+                _avatarFile != null ? FileImage(_avatarFile!) : null,
+            child: _avatarFile == null
                 ? Text(
                     username.isNotEmpty ? username[0].toUpperCase() : '?',
                     style: GoogleFonts.bebasNeue(
@@ -317,7 +297,9 @@ class _SportsBgPainter extends CustomPainter {
       (Offset(s.width * 0.88, s.height * 0.08), 38.0),
       (Offset(s.width * 0.1,  s.height * 0.92), 65.0),
       (Offset(s.width * 0.1,  s.height * 0.92), 45.0),
-    ]) { canvas.drawCircle(c, r, _stroke); }
+    ]) {
+      canvas.drawCircle(c, r, _stroke);
+    }
 
     canvas.drawLine(Offset(-20, s.height * 0.15), Offset(s.width * 0.40, -20), _thick);
     canvas.drawLine(Offset(-20, s.height * 0.28), Offset(s.width * 0.55, -20), _thick);

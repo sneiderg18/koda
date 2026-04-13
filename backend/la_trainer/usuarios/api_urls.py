@@ -41,4 +41,6 @@ urlpatterns = [
     path('ia/progreso/', ia_views.AnalizarProgresoAPIView.as_view(), name='api_ia_progreso'),
     path('ia/coach/', ia_views.ChatCoachAPIView.as_view(), name='api_ia_coach'),
     path('ia/historial/', ia_views.HistorialConversacionAPIView.as_view(), name='api_ia_historial'),
+    # Rutinas
+    path('planes/entrenamiento/<int:pk>/rutina/', api_views.RutinaEjercicioAPIView.as_view(), name='api_rutina_ejercicio'),
 ]

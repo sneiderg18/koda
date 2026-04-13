@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password
-from .models import Usuario, PlanEntrenamiento, Ejercicio, PlanAlimentacion, Comida, Progreso
+from .models import Usuario, PlanEntrenamiento, Ejercicio, PlanAlimentacion, Comida, Progreso, Conversacion, RutinaEjercicio
 
 class RegistroSerializer (serializers.ModelSerializer):
     password1 = serializers.CharField(write_only=True, validators=[validate_password])
@@ -55,7 +55,15 @@ class EjercicioSerializer(serializers.ModelSerializer):
         model = Ejercicio
         fields = '__all__'
 
+class RutinaEjercicioSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RutinaEjercicio
+        fields = '__all__'
+        read_only_fields = ('plan',)
+
 class PlanEntrenamientoSerializer(serializers.ModelSerializer):
+    rutina_ejercicios = RutinaEjercicioSerializer(many=True, read_only=True)
+
     class Meta:
         model = PlanEntrenamiento
         fields = '__all__'
@@ -80,3 +88,9 @@ class ProgresoSerializer(serializers.ModelSerializer):
         model = Progreso
         fields = '__all__'
         read_only_fields = ('usuario',)
+
+class ConversacionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Conversacion
+        fields = ('id', 'tipo', 'mensaje_usuario', 'respuesta_ia', 'fecha')
+        read_only_fields = ('id', 'fecha')
