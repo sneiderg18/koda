@@ -73,7 +73,6 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: _buildAppBar(context),
       body: Column(
         children: [
-          // ── Contenido principal ─────────────────────────────────────────
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
@@ -86,7 +85,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          // ── Barra inferior — abre el chat IA ────────────────────────────
           _CoachBottomBar(onTap: _openCoachChat),
         ],
       ),
@@ -117,16 +115,13 @@ class _HomeScreenState extends State<HomeScreen> {
       actions: [
         PopupMenuButton<String>(
           icon: const Icon(Icons.account_circle_rounded, color: Colors.white),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           position: PopupMenuPosition.under,
           onSelected: (value) => _handleMenuSelection(context, value),
           itemBuilder: (_) => [
-            _buildMenuItem(
-                'profile', Icons.person_outline_rounded, 'Perfil', _kRed),
+            _buildMenuItem('profile', Icons.person_outline_rounded, 'Perfil', _kRed),
             const PopupMenuDivider(),
-            _buildMenuItem('logout', Icons.logout_rounded, 'Cerrar sesión',
-                Colors.redAccent),
+            _buildMenuItem('logout', Icons.logout_rounded, 'Cerrar sesión', Colors.redAccent),
           ],
         ),
       ],
@@ -201,7 +196,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ── Barra inferior — encabezado del chat IA ───────────────────────────────────
+// ── Barra inferior ────────────────────────────────────────────────────────────
 class _CoachBottomBar extends StatelessWidget {
   final VoidCallback onTap;
   const _CoachBottomBar({required this.onTap});
@@ -215,7 +210,6 @@ class _CoachBottomBar extends StatelessWidget {
         decoration: const BoxDecoration(
           border: Border(top: BorderSide(color: Color(0xFFEEEEEE))),
         ),
-        // ✅ ia_chat.png se ajusta adecuadamente manteniendo la proporción
         child: Image.asset(
           'assets/images/ia_chat.png',
           width: double.infinity,
@@ -240,15 +234,12 @@ class _CoachChatModalState extends State<_CoachChatModal> {
   final _scrollCtrl = ScrollController();
   final List<_ChatMessage> _messages = [];
   bool _isSending = false;
+  bool _isLoadingHistory = true;
 
   @override
   void initState() {
     super.initState();
-    _messages.add(const _ChatMessage(
-      text:
-          '¡Hola! Soy tu coach personal 💪 ¿En qué te puedo ayudar hoy?',
-      isUser: false,
-    ));
+    _loadHistory();
   }
 
   @override
@@ -258,6 +249,96 @@ class _CoachChatModalState extends State<_CoachChatModal> {
     super.dispose();
   }
 
+  // ── Carga historial desde la API ──────────────────────────────────────────
+  Future<void> _loadHistory() async {
+    try {
+      final token = await AuthService.getToken();
+      final response = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/ia/historial/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(response.body);
+
+        List<dynamic> data = [];
+        if (decoded is List) {
+          data = decoded;
+        } else if (decoded is Map && decoded.containsKey('results')) {
+          data = decoded['results'] as List<dynamic>;
+        } else if (decoded is Map && decoded.containsKey('historial')) {
+          data = decoded['historial'] as List<dynamic>;
+        }
+
+        // ── Ordena por id ascendente ──────────────────────────────────
+        data.sort((a, b) {
+          final idA = (a is Map) ? (a['id'] ?? 0) : 0;
+          final idB = (b is Map) ? (b['id'] ?? 0) : 0;
+          return (idA as num).compareTo(idB as num);
+        });
+
+        final List<_ChatMessage> history = [];
+
+        for (final entry in data) {
+          if (entry is! Map) continue;
+
+          final userMsg = (entry['mensaje_usuario'] ?? '').toString().trim();
+          final iaMsg = (entry['respuesta_ia'] ?? '').toString().trim();
+
+          if (userMsg.isNotEmpty) {
+            history.add(_ChatMessage(text: userMsg, isUser: true));
+          }
+          if (iaMsg.isNotEmpty) {
+            history.add(_ChatMessage(text: iaMsg, isUser: false));
+          }
+        }
+
+        if (!mounted) return;
+
+        setState(() {
+          _messages.clear();
+          _messages.addAll(history);
+          if (_messages.isEmpty) {
+            _messages.add(const _ChatMessage(
+              text: '¡Hola! Soy tu coach personal 💪 ¿En qué te puedo ayudar hoy?',
+              isUser: false,
+            ));
+          }
+          _isLoadingHistory = false;
+        });
+
+        _scrollToBottom();
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _messages.add(const _ChatMessage(
+            text: '¡Hola! Soy tu coach personal 💪 ¿En qué te puedo ayudar hoy?',
+            isUser: false,
+          ));
+          _isLoadingHistory = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error cargando historial: $e');
+      if (mounted) {
+        setState(() {
+          _messages.add(const _ChatMessage(
+            text: '¡Hola! Soy tu coach personal 💪 ¿En qué te puedo ayudar hoy?',
+            isUser: false,
+          ));
+          _isLoadingHistory = false;
+        });
+      }
+    }
+  }
+
+  // ── Envía mensaje ─────────────────────────────────────────────────────────
   Future<void> _sendMessage() async {
     final text = _msgCtrl.text.trim();
     if (text.isEmpty || _isSending) return;
@@ -347,28 +428,29 @@ class _CoachChatModalState extends State<_CoachChatModal> {
           ),
           child: Column(
             children: [
-              // Handle bar
               _buildHandle(),
-              // Header
               _buildHeader(context),
-              // Messages
+              // ── Lista de mensajes ────────────────────────────────────
               Expanded(
-                child: ListView.builder(
-                  controller: _scrollCtrl,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  itemCount: _messages.length,
-                  itemBuilder: (_, i) => _BubbleTile(msg: _messages[i]),
-                ),
+                child: _isLoadingHistory
+                    ? const Center(
+                        child: CircularProgressIndicator(color: _kRed),
+                      )
+                    : ListView.builder(
+                        controller: _scrollCtrl,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        itemCount: _messages.length,
+                        itemBuilder: (_, i) => _BubbleTile(msg: _messages[i]),
+                      ),
               ),
-              // Typing indicator
+              // ── Typing indicator ─────────────────────────────────────
               if (_isSending)
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   child: Row(
                     children: [
-                      // ✅ Typing indicator con ia_icon_chat.png
                       Image.asset(
                         'assets/images/ia_icon_chat.png',
                         width: 28,
@@ -380,7 +462,7 @@ class _CoachChatModalState extends State<_CoachChatModal> {
                     ],
                   ),
                 ),
-              // Input
+              // ── Input ────────────────────────────────────────────────
               _buildInput(bottomInset),
             ],
           ),
@@ -412,7 +494,6 @@ class _CoachChatModalState extends State<_CoachChatModal> {
       ),
       child: Row(
         children: [
-          // ✅ Header con ia_icon_chat.png
           Image.asset(
             'assets/images/ia_icon_chat.png',
             width: 40,
@@ -435,8 +516,7 @@ class _CoachChatModalState extends State<_CoachChatModal> {
           const Spacer(),
           IconButton(
             onPressed: () => Navigator.pop(context),
-            icon: const Icon(Icons.close_rounded,
-                color: Colors.grey, size: 22),
+            icon: const Icon(Icons.close_rounded, color: Colors.grey, size: 22),
           ),
         ],
       ),
@@ -458,12 +538,11 @@ class _CoachChatModalState extends State<_CoachChatModal> {
               textCapitalization: TextCapitalization.sentences,
               decoration: InputDecoration(
                 hintText: 'Escribe tu mensaje...',
-                hintStyle:
-                    const TextStyle(color: Colors.grey, fontSize: 14),
+                hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
                 filled: true,
                 fillColor: const Color(0xFFF5F7FA),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
@@ -497,8 +576,7 @@ class _CoachChatModalState extends State<_CoachChatModal> {
                             offset: const Offset(0, 3))
                       ],
               ),
-              child: const Icon(Icons.send_rounded,
-                  color: Colors.white, size: 20),
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
             ),
           ),
         ],
@@ -528,7 +606,6 @@ class _BubbleTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!msg.isUser) ...[
-            // ✅ Ícono IA en burbuja con ia_icon_chat.png
             Image.asset(
               'assets/images/ia_icon_chat.png',
               width: 28,
@@ -539,8 +616,7 @@ class _BubbleTile extends StatelessWidget {
           ],
           Flexible(
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 gradient: msg.isUser
                     ? const LinearGradient(
@@ -565,7 +641,6 @@ class _BubbleTile extends StatelessWidget {
                   ),
                 ],
               ),
-              // ✅ Soporte markdown negritas **texto**
               child: _buildRichText(msg.text, msg.isUser),
             ),
           ),
@@ -574,8 +649,7 @@ class _BubbleTile extends StatelessWidget {
             const CircleAvatar(
               radius: 14,
               backgroundColor: Color(0xFFEEEEEE),
-              child: Icon(Icons.person_rounded,
-                  color: Color(0xFF666666), size: 14),
+              child: Icon(Icons.person_rounded, color: Color(0xFF666666), size: 14),
             ),
           ],
         ],
@@ -583,7 +657,6 @@ class _BubbleTile extends StatelessWidget {
     );
   }
 
-  // ✅ Convierte **texto** y *texto* en negritas reales
   Widget _buildRichText(String text, bool isUser) {
     final baseColor = isUser ? Colors.white : const Color(0xFF1A1A2E);
     final spans = <InlineSpan>[];
