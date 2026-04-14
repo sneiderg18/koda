@@ -385,7 +385,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
       child: Stack(
         alignment: Alignment.bottomCenter,
         children: [
-          Image.asset('images/register.png', height: _kImageHeight, fit: BoxFit.contain),
+          Image.asset('assets/images/register.png', height: _kImageHeight, fit: BoxFit.contain),
           Positioned(
             bottom: 0,
             child: SizedBox(

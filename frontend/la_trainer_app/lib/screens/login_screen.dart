@@ -294,7 +294,7 @@ class _LoginScreenState extends State<LoginScreen> {
         alignment: Alignment.bottomCenter,
         children: [
           Image.asset(
-            'images/mask_group.png',
+            'assets/images/mask_group.png',
             height: _kImageHeight,
             fit: BoxFit.contain,
           ),
