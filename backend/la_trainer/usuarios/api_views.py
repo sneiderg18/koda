@@ -134,9 +134,18 @@ class PlanActivoAPIView(APIView):
                 'mensaje': 'No tienes un plan activo. Genera uno desde /api/ia/plan/entrenamiento/',
             })
 
+        dias_semana = request.user.dias_entrenamiento or 3
+        sesiones_totales = plan.duracion * dias_semana
+
         return Response({
             'tiene_plan_activo': True,
             'plan': PlanEntrenamientoSerializer(plan).data,
+            'sesiones_completadas': plan.sesiones_completadas,
+            'sesiones_totales': sesiones_totales,
+            'sesiones_restantes': max(0, sesiones_totales - plan.sesiones_completadas),
+            'porcentaje_completado': round(
+                (plan.sesiones_completadas / sesiones_totales * 100) if sesiones_totales > 0 else 0, 1
+            ),
         })
 
 
@@ -202,6 +211,7 @@ class RutinaEjercicioAPIView(APIView):
 
 
 # ─── Alimentación ─────────────────────────────────────────────
+
 class PlanAlimentacionAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -219,22 +229,61 @@ class PlanAlimentacionAPIView(APIView):
 
 
 class PlanAlimentacionActivoAPIView(APIView):
+    """
+    GET /api/planes/alimentacion/activo/
+
+    Devuelve el plan activo con TODAS las comidas del dia (rutina_comidas),
+    cada una con nombre, momento, macros, ingredientes, preparacion y
+    tiempo de preparacion. Equivalente a PlanActivoAPIView para ejercicios.
+
+    Tambien incluye el progreso del dia actual para que Flutter sepa
+    si el usuario ya registro su alimentacion hoy.
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from datetime import date
+
         plan = PlanAlimentacion.objects.filter(
             usuario=request.user, activo=True
         ).last()
 
         if not plan:
+            plan_completado = PlanAlimentacion.objects.filter(
+                usuario=request.user, completado=True
+            ).last()
+            if plan_completado:
+                return Response({
+                    'tiene_plan_activo': False,
+                    'plan_completado': True,
+                    'puede_generar_nuevo': True,
+                    'mensaje': 'Completaste tu plan de alimentacion. Genera uno nuevo desde /api/ia/plan/alimentacion/',
+                })
             return Response({
                 'tiene_plan_activo': False,
-                'mensaje': 'No tienes un plan de alimentación activo. Genera uno desde /api/ia/plan/alimentacion/',
+                'plan_completado': False,
+                'puede_generar_nuevo': True,
+                'mensaje': 'No tienes un plan de alimentacion activo. Genera uno desde /api/ia/plan/alimentacion/',
             })
+
+        # Verificar si ya registro cumplimiento hoy
+        progreso_hoy = ProgresoAlimentacion.objects.filter(
+            usuario=request.user, fecha=date.today()
+        ).first()
 
         return Response({
             'tiene_plan_activo': True,
             'plan': PlanAlimentacionSerializer(plan).data,
+            # Progreso del plan (igual que ejercicios)
+            'dias_completados': plan.dias_completados,
+            'duracion_dias': plan.duracion_dias,
+            'dias_restantes': max(0, plan.duracion_dias - plan.dias_completados),
+            'porcentaje_completado': round(
+                (plan.dias_completados / plan.duracion_dias * 100) if plan.duracion_dias > 0 else 0, 1
+            ),
+            # Estado del dia — Flutter decide si mostrar boton de registro o el check de "ya listo hoy"
+            'ya_registro_hoy': progreso_hoy is not None,
+            'progreso_hoy': ProgresoAlimentacionSerializer(progreso_hoy).data if progreso_hoy else None,
         })
 
 
@@ -259,10 +308,10 @@ class PlanAlimentacionDetalleAPIView(APIView):
         if not plan:
             return Response({'error': 'Plan no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
         if not plan.activo:
-            return Response({'error': 'Este plan ya está finalizado.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Este plan ya esta finalizado.'}, status=status.HTTP_400_BAD_REQUEST)
         plan.activo = False
         plan.save()
-        return Response({'mensaje': 'Plan de alimentación finalizado. Ya puedes generar uno nuevo.'})
+        return Response({'mensaje': 'Plan de alimentacion finalizado. Ya puedes generar uno nuevo.'})
 
     def put(self, request, pk):
         plan = self.get_object(pk, request.user)
@@ -300,6 +349,7 @@ class RutinaComidaAPIView(APIView):
 
 
 # ─── Comidas base ─────────────────────────────────────────────
+
 class ComidaAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -350,7 +400,8 @@ class ComidaDetalleAPIView(APIView):
         return Response({'mensaje': 'Comida eliminada correctamente.'}, status=status.HTTP_200_OK)
 
 
-# ─── Progreso ─────────────────────────────────────────────────
+# ─── Progreso de peso corporal ─────────────────────────────────
+
 class ProgresoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -395,26 +446,28 @@ class ProgresoDetalleAPIView(APIView):
 
 
 # ─── Onboarding ───────────────────────────────────────────────
+
 class OnboardingAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         if request.user.peso and request.user.altura:
             return Response(
-                {'error': 'El perfil básico ya fue completado. Para hacer cambios habla con el coach.'},
+                {'error': 'El perfil basico ya fue completado. Para hacer cambios habla con el coach.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
         serializer = UsuarioSerializer(request.user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response({
-                'mensaje': '¡Perfil básico completado! El coach te hará algunas preguntas más.',
+                'mensaje': 'Perfil basico completado! El coach te hara algunas preguntas mas.',
                 'usuario': serializer.data
             })
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# ─── Completar sesión de entrenamiento ────────────────────────
+# ─── Completar sesion de entrenamiento (endpoint legacy) ──────
+
 class CompletarSesionAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -440,14 +493,14 @@ class CompletarSesionAPIView(APIView):
             plan.activo = False
             plan.fecha_completado = timezone.now()
             mensaje = (
-                f'¡Felicitaciones! Completaste el plan de {plan.duracion} semanas. '
+                f'Felicitaciones! Completaste el plan de {plan.duracion} semanas. '
                 'Ya puedes generar un nuevo plan desde /api/ia/plan/entrenamiento/'
             )
         else:
             restantes = sesiones_totales - plan.sesiones_completadas
             mensaje = (
-                f'¡Sesión registrada! Llevas {plan.sesiones_completadas} de {sesiones_totales} sesiones. '
-                f'Te faltan {restantes} sesión(es) para completar el plan.'
+                f'Sesion registrada! Llevas {plan.sesiones_completadas} de {sesiones_totales} sesiones. '
+                f'Te faltan {restantes} sesion(es) para completar el plan.'
             )
 
         plan.save()
@@ -463,12 +516,17 @@ class CompletarSesionAPIView(APIView):
             'mensaje': mensaje,
             'sesiones_completadas': plan.sesiones_completadas,
             'sesiones_totales': sesiones_totales,
+            'sesiones_restantes': max(0, sesiones_totales - plan.sesiones_completadas),
+            'porcentaje_completado': round(
+                (plan.sesiones_completadas / sesiones_totales * 100) if sesiones_totales > 0 else 0, 1
+            ),
             'plan_completado': plan.completado,
             'plan_activo': plan.activo,
         }, status=status.HTTP_200_OK)
 
 
 # ─── Registro de actividad ────────────────────────────────────
+
 class RegistroActividadAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -500,8 +558,19 @@ class RegistroActividadAPIView(APIView):
         )
 
 
-# ─── Progreso de alimentación ─────────────────────────────────
+# ─── Progreso de alimentacion ─────────────────────────────────
+
 class ProgresoAlimentacionAPIView(APIView):
+    """
+    GET  /api/progreso/alimentacion/  → historial completo de cumplimiento diario
+    POST /api/progreso/alimentacion/  → registrar cumplimiento del dia
+
+    El POST es el equivalente a completar un ejercicio en el flujo de entrenamiento:
+    - Asocia automaticamente al plan activo
+    - Actualiza dias_completados del plan
+    - Si llega a duracion_dias lo marca como completado (igual que sesiones en entrenamiento)
+    - Devuelve estado completo del plan para que Flutter muestre progreso sin calcular nada
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -511,15 +580,18 @@ class ProgresoAlimentacionAPIView(APIView):
 
     def post(self, request):
         from datetime import date
+        from django.utils import timezone
+
+        # Un solo registro por dia
         if ProgresoAlimentacion.objects.filter(
             usuario=request.user, fecha=date.today()
         ).exists():
             return Response(
-                {'error': 'Ya registraste tu alimentación de hoy. Usa PUT para editarlo.'},
+                {'error': 'Ya registraste tu alimentacion de hoy. Usa PUT /api/progreso/alimentacion/<id>/ para editarlo.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Asociar automáticamente al plan de alimentación activo
+        # Asociar automaticamente al plan de alimentacion activo
         plan_activo = PlanAlimentacion.objects.filter(
             usuario=request.user, activo=True
         ).last()
@@ -528,20 +600,61 @@ class ProgresoAlimentacionAPIView(APIView):
         if serializer.is_valid():
             serializer.save(usuario=request.user, plan=plan_activo)
 
-            # Actualizar contador de días completados en el plan
+            # Calcular estado del plan para devolver en la respuesta
+            plan_completado = False
+            puede_generar_nuevo = False
+            dias_completados = 0
+            duracion_dias = 0
+            dias_restantes = 0
+            porcentaje = 0.0
+            mensaje = 'Cumplimiento del dia registrado correctamente.'
+
             if plan_activo:
                 plan_activo.dias_completados = ProgresoAlimentacion.objects.filter(
                     usuario=request.user, plan=plan_activo
                 ).count()
-                # Si llegó a la duración del plan, marcarlo como completado automáticamente
+                dias_completados = plan_activo.dias_completados
+                duracion_dias = plan_activo.duracion_dias
+                dias_restantes = max(0, duracion_dias - dias_completados)
+                porcentaje = round(
+                    (dias_completados / duracion_dias * 100) if duracion_dias > 0 else 0, 1
+                )
+
                 if plan_activo.dias_completados >= plan_activo.duracion_dias:
-                    from django.utils import timezone
+                    # Plan completado automaticamente — igual que cuando se completa
+                    # la ultima sesion de entrenamiento
                     plan_activo.completado = True
                     plan_activo.activo = False
                     plan_activo.fecha_completado = timezone.now()
+                    plan_completado = True
+                    puede_generar_nuevo = True
+                    dias_restantes = 0
+                    porcentaje = 100.0
+                    mensaje = (
+                        f'Felicitaciones! Completaste los {duracion_dias} dias del plan de alimentacion. '
+                        'Ya puedes generar un nuevo plan desde /api/ia/plan/alimentacion/'
+                    )
+                else:
+                    mensaje = (
+                        f'Dia {dias_completados} de {duracion_dias} registrado. '
+                        f'Te faltan {dias_restantes} dias para completar el plan.'
+                    )
+
                 plan_activo.save()
 
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response({
+                'registro': serializer.data,
+                'mensaje': mensaje,
+                # Estado del plan — mismos campos que el flujo de ejercicios
+                'plan_completado': plan_completado,
+                'plan_activo': not plan_completado,
+                'puede_generar_nuevo': puede_generar_nuevo,
+                'dias_completados': dias_completados,
+                'duracion_dias': duracion_dias,
+                'dias_restantes': dias_restantes,
+                'porcentaje_completado': porcentaje,
+            }, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -553,6 +666,15 @@ class ProgresoAlimentacionDetalleAPIView(APIView):
             return ProgresoAlimentacion.objects.get(pk=pk, usuario=usuario)
         except ProgresoAlimentacion.DoesNotExist:
             return None
+
+    def get(self, request, pk):
+        registro = self.get_object(pk, request.user)
+        if not registro:
+            return Response(
+                {'error': 'Registro no encontrado.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        return Response(ProgresoAlimentacionSerializer(registro).data)
 
     def put(self, request, pk):
         registro = self.get_object(pk, request.user)
@@ -578,14 +700,11 @@ class ProgresoAlimentacionDetalleAPIView(APIView):
         return Response({'mensaje': 'Registro eliminado correctamente.'}, status=status.HTTP_200_OK)
 
 
-# ─── Sesión de entrenamiento en tiempo real ───────────────────
+# ─── Sesion de entrenamiento en tiempo real ───────────────────
 
 class IniciarSesionAPIView(APIView):
     """
     POST /api/sesion/iniciar/
-    El usuario presiona 'Empezar rutina'. Crea la sesión y
-    devuelve todos los ejercicios listos para recorrer uno a uno.
-    Si ya hay una sesión activa sin completar la devuelve en lugar de crear una nueva.
     """
     permission_classes = [IsAuthenticated]
 
@@ -595,12 +714,23 @@ class IniciarSesionAPIView(APIView):
         ).last()
 
         if not plan:
+            plan_completado = PlanEntrenamiento.objects.filter(
+                usuario=request.user, completado=True
+            ).last()
+            if plan_completado:
+                return Response(
+                    {
+                        'error': 'Completaste tu plan anterior! Genera uno nuevo desde /api/ia/plan/entrenamiento/',
+                        'plan_completado': True,
+                        'puede_generar_nuevo': True,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             return Response(
                 {'error': 'No tienes un plan activo. Genera uno desde /api/ia/plan/entrenamiento/'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Si ya hay una sesión abierta la reutiliza
         sesion_abierta = SesionEntrenamiento.objects.filter(
             usuario=request.user,
             plan=plan,
@@ -609,17 +739,20 @@ class IniciarSesionAPIView(APIView):
 
         if sesion_abierta:
             return Response({
-                'mensaje': 'Retomando sesión en curso.',
-                'sesion': SesionEntrenamientoSerializer(sesion_abierta).data
+                'mensaje': 'Retomando sesion en curso.',
+                'sesion': SesionEntrenamientoSerializer(sesion_abierta).data,
+                'es_sesion_nueva': False,
             }, status=status.HTTP_200_OK)
 
-        # Crea sesión nueva
+        dias_semana = request.user.dias_entrenamiento or 3
+        sesiones_totales = plan.duracion * dias_semana
+        sesion_numero = plan.sesiones_completadas + 1
+
         sesion = SesionEntrenamiento.objects.create(
             usuario=request.user,
             plan=plan,
         )
 
-        # Crea un EjercicioSesion por cada ejercicio del plan
         for ejercicio in plan.rutina_ejercicios.all():
             EjercicioSesion.objects.create(
                 sesion=sesion,
@@ -627,17 +760,18 @@ class IniciarSesionAPIView(APIView):
             )
 
         return Response({
-            'mensaje': '¡Sesión iniciada! A entrenar.',
-            'sesion': SesionEntrenamientoSerializer(sesion).data
+            'mensaje': f'Sesion {sesion_numero} iniciada! A entrenar.',
+            'sesion': SesionEntrenamientoSerializer(sesion).data,
+            'es_sesion_nueva': True,
+            'sesion_numero': sesion_numero,
+            'sesiones_totales': sesiones_totales,
+            'sesiones_completadas': plan.sesiones_completadas,
         }, status=status.HTTP_201_CREATED)
 
 
 class CompletarEjercicioAPIView(APIView):
     """
     POST /api/sesion/<sesion_id>/ejercicio/<ejercicio_sesion_id>/completar/
-    El usuario presiona 'Finalicé este ejercicio'.
-    Marca el ejercicio como completado y devuelve el siguiente.
-    Si era el último, cierra la sesión y dispara CompletarSesion.
     """
     permission_classes = [IsAuthenticated]
 
@@ -650,13 +784,13 @@ class CompletarEjercicioAPIView(APIView):
             )
         except SesionEntrenamiento.DoesNotExist:
             return Response(
-                {'error': 'Sesión no encontrada.'},
+                {'error': 'Sesion no encontrada.'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         if sesion.completada:
             return Response(
-                {'error': 'Esta sesión ya fue completada.'},
+                {'error': 'Esta sesion ya fue completada.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -666,17 +800,15 @@ class CompletarEjercicioAPIView(APIView):
             )
         except EjercicioSesion.DoesNotExist:
             return Response(
-                {'error': 'Ejercicio no encontrado en esta sesión.'},
+                {'error': 'Ejercicio no encontrado en esta sesion.'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Marcar ejercicio como completado
         ejercicio_sesion.completado = True
         ejercicio_sesion.fecha_completado = timezone.now()
         ejercicio_sesion.notas = request.data.get('notas', '')
         ejercicio_sesion.save()
 
-        # Buscar el siguiente ejercicio pendiente
         siguiente = sesion.ejercicios_completados.filter(
             completado=False
         ).order_by('rutina_ejercicio__orden').first()
@@ -690,15 +822,15 @@ class CompletarEjercicioAPIView(APIView):
                 'sesion_completada': False,
                 'siguiente_ejercicio': EjercicioSesionSerializer(siguiente).data,
                 'descanso_segundos': _parsear_descanso(siguiente.rutina_ejercicio.descanso),
+                'ejercicios_hechos': sesion.ejercicios_completados.filter(completado=True).count(),
+                'total_ejercicios': sesion.ejercicios_completados.count(),
             }, status=status.HTTP_200_OK)
 
         else:
-            # Era el último — cerrar sesión
             sesion.completada = True
             sesion.fecha_fin = timezone.now()
             sesion.save()
 
-            # Disparar lógica de CompletarSesion
             plan = sesion.plan
             dias_semana = request.user.dias_entrenamiento or 3
             sesiones_totales = plan.duracion * dias_semana
@@ -708,41 +840,63 @@ class CompletarEjercicioAPIView(APIView):
                 plan.completado = True
                 plan.activo = False
                 plan.fecha_completado = timezone.now()
-                mensaje_plan = (
-                    f'¡Completaste el plan de {plan.duracion} semanas! '
-                    'Ya puedes generar uno nuevo.'
+                plan.save()
+
+                RegistroActividad.objects.create(
+                    usuario=request.user,
+                    plan=plan,
+                    sesion_numero=plan.sesiones_completadas,
+                    notas=request.data.get('notas', '')
                 )
+
+                return Response({
+                    'mensaje': (
+                        f'Completaste todos los ejercicios! '
+                        f'Felicitaciones! Terminaste el plan de {plan.duracion} semanas. '
+                        'Ya puedes generar un nuevo plan desde /api/ia/plan/entrenamiento/'
+                    ),
+                    'sesion_completada': True,
+                    'plan_completado': True,
+                    'plan_activo': False,
+                    'puede_generar_nuevo': True,
+                    'sesiones_completadas': plan.sesiones_completadas,
+                    'sesiones_totales': sesiones_totales,
+                    'porcentaje_completado': 100.0,
+                }, status=status.HTTP_200_OK)
+
             else:
                 restantes = sesiones_totales - plan.sesiones_completadas
-                mensaje_plan = (
-                    f'Llevas {plan.sesiones_completadas} de {sesiones_totales} sesiones. '
-                    f'Te faltan {restantes}.'
+                plan.save()
+
+                RegistroActividad.objects.create(
+                    usuario=request.user,
+                    plan=plan,
+                    sesion_numero=plan.sesiones_completadas,
+                    notas=request.data.get('notas', '')
                 )
 
-            plan.save()
-
-            RegistroActividad.objects.create(
-                usuario=request.user,
-                plan=plan,
-                sesion_numero=plan.sesiones_completadas,
-                notas=request.data.get('notas', '')
-            )
-
-            return Response({
-                'mensaje': '¡Completaste todos los ejercicios de hoy! ' + mensaje_plan,
-                'sesion_completada': True,
-                'plan_completado': plan.completado,
-                'plan_activo': plan.activo,
-                'sesiones_completadas': plan.sesiones_completadas,
-                'sesiones_totales': sesiones_totales,
-            }, status=status.HTTP_200_OK)
+                return Response({
+                    'mensaje': (
+                        f'Completaste todos los ejercicios de hoy! '
+                        f'Llevas {plan.sesiones_completadas} de {sesiones_totales} sesiones. '
+                        f'Te faltan {restantes}. Vuelve manana para tu proxima sesion.'
+                    ),
+                    'sesion_completada': True,
+                    'plan_completado': False,
+                    'plan_activo': True,
+                    'puede_generar_nuevo': False,
+                    'sesiones_completadas': plan.sesiones_completadas,
+                    'sesiones_totales': sesiones_totales,
+                    'sesiones_restantes': restantes,
+                    'porcentaje_completado': round(
+                        plan.sesiones_completadas / sesiones_totales * 100, 1
+                    ),
+                }, status=status.HTTP_200_OK)
 
 
 class SesionActivaAPIView(APIView):
     """
     GET /api/sesion/activa/
-    Flutter consulta esto al volver a la pantalla de rutina
-    para saber si hay una sesión en curso y en qué ejercicio está.
     """
     permission_classes = [IsAuthenticated]
 
@@ -752,28 +906,50 @@ class SesionActivaAPIView(APIView):
             completada=False
         ).last()
 
+        plan_activo = PlanEntrenamiento.objects.filter(
+            usuario=request.user, activo=True
+        ).last()
+
+        estado_plan = None
+        if plan_activo:
+            dias_semana = request.user.dias_entrenamiento or 3
+            sesiones_totales = plan_activo.duracion * dias_semana
+            estado_plan = {
+                'id': plan_activo.pk,
+                'sesiones_completadas': plan_activo.sesiones_completadas,
+                'sesiones_totales': sesiones_totales,
+                'sesiones_restantes': max(0, sesiones_totales - plan_activo.sesiones_completadas),
+                'porcentaje_completado': round(
+                    (plan_activo.sesiones_completadas / sesiones_totales * 100)
+                    if sesiones_totales > 0 else 0, 1
+                ),
+                'plan_completado': plan_activo.completado,
+            }
+
         if not sesion:
             return Response({
                 'tiene_sesion_activa': False,
-                'mensaje': 'No tienes una sesión en curso.'
+                'mensaje': 'No tienes una sesion en curso.',
+                'estado_plan': estado_plan,
             })
 
         return Response({
             'tiene_sesion_activa': True,
-            'sesion': SesionEntrenamientoSerializer(sesion).data
+            'sesion': SesionEntrenamientoSerializer(sesion).data,
+            'estado_plan': estado_plan,
         })
 
 
 def _parsear_descanso(descanso_str):
     """
     Convierte el texto de descanso de la IA a segundos para el timer de Flutter.
-    Ejemplos: '60 segundos' → 60, '2 minutos' → 120, '90 seg' → 90
+    Ejemplos: '60 segundos' -> 60, '2 minutos' -> 120, '90 seg' -> 90
     """
     import re
     texto = descanso_str.lower()
     numeros = re.findall(r'\d+', texto)
     if not numeros:
-        return 60  # default
+        return 60
     valor = int(numeros[0])
     if 'min' in texto:
         return valor * 60
