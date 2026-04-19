@@ -98,6 +98,11 @@ class PlanEntrenamiento(models.Model):
     tipo_entrenamiento = models.CharField(max_length=100, null=True, blank=True)
     nivel = models.CharField(max_length=50)
     duracion = models.IntegerField(help_text="Duracion en semanas")
+    activo = models.BooleanField(default=True)
+    completado = models.BooleanField(default=False)
+    fecha_completado = models.DateTimeField(null=True, blank=True)
+    sesiones_completadas = models.PositiveIntegerField(default=0)
+    creado_en = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"Plan {self.pk} - {self.usuario.email}"
@@ -117,6 +122,7 @@ class PlanAlimentacion(models.Model):
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name='planes_alimentacion')
     calorias = models.IntegerField()
     objetivo = models.CharField(max_length=500)
+    activo = models.BooleanField(default=True)
     creado_en = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -166,7 +172,8 @@ class Conversacion(models.Model):
 
     def __str__(self):
         return f"{self.usuario.email} - {self.tipo} - {self.fecha}"
-    
+
+
 class RutinaEjercicio(models.Model):
     plan = models.ForeignKey(
         PlanEntrenamiento,
@@ -185,3 +192,129 @@ class RutinaEjercicio(models.Model):
 
     def __str__(self):
         return f"{self.nombre} - Plan {self.plan.pk}"
+
+
+# ─── Igual que RutinaEjercicio pero para alimentación ────────
+class RutinaComida(models.Model):
+    MOMENTO_CHOICES = [
+        ('desayuno', 'Desayuno'),
+        ('almuerzo', 'Almuerzo'),
+        ('cena', 'Cena'),
+        ('merienda', 'Merienda'),
+    ]
+
+    plan = models.ForeignKey(
+        PlanAlimentacion,
+        on_delete=models.CASCADE,
+        related_name='rutina_comidas'
+    )
+    nombre = models.CharField(max_length=200)
+    momento = models.CharField(max_length=20, choices=MOMENTO_CHOICES, default='almuerzo')
+    calorias = models.IntegerField(default=0)
+    proteinas = models.FloatField(default=0)
+    carbohidratos = models.FloatField(default=0)
+    grasas = models.FloatField(default=0)
+    descripcion = models.TextField(blank=True)
+    orden = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ['orden']
+
+    def __str__(self):
+        return f"{self.nombre} - Plan {self.plan.pk}"
+
+class RegistroActividad(models.Model):
+    """Registra cada sesión completada — sirve como calendario de constancia."""
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name='registros_actividad')
+    plan = models.ForeignKey(
+        PlanEntrenamiento, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='registros_actividad'
+    )
+    fecha = models.DateField(auto_now_add=True)
+    sesion_numero = models.PositiveIntegerField(help_text="Número de sesión dentro del plan")
+    notas = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-fecha']
+        verbose_name = 'Registro de Actividad'
+        verbose_name_plural = 'Registros de Actividad'
+
+    def __str__(self):
+        return f"{self.usuario.email} - Sesión {self.sesion_numero} - {self.fecha}"
+
+
+class ProgresoAlimentacion(models.Model):
+    """Registro diario del cumplimiento del plan de alimentación."""
+    NIVEL_CHOICES = [
+        ('excelente', 'Excelente'),
+        ('bueno', 'Bueno'),
+        ('regular', 'Regular'),
+        ('malo', 'Malo'),
+    ]
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name='progreso_alimentacion')
+    plan = models.ForeignKey(
+        PlanAlimentacion, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='progresos'
+    )
+    fecha = models.DateField()
+    calorias_consumidas = models.PositiveIntegerField(null=True, blank=True)
+    nivel_cumplimiento = models.CharField(max_length=20, choices=NIVEL_CHOICES, blank=True)
+    agua_consumida = models.FloatField(null=True, blank=True, help_text="Litros consumidos")
+    notas = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-fecha']
+        unique_together = ('usuario', 'fecha')
+        verbose_name = 'Progreso de Alimentación'
+        verbose_name_plural = 'Progresos de Alimentación'
+
+    def __str__(self):
+        return f"{self.usuario.email} - Alimentación {self.fecha}"
+
+class SesionEntrenamiento(models.Model):
+    """
+    Representa una sesión de entrenamiento en tiempo real.
+    Se crea cuando el usuario presiona 'Empezar' y se cierra
+    cuando completa el último ejercicio.
+    """
+    usuario = models.ForeignKey(
+        Usuario, on_delete=models.CASCADE, related_name='sesiones'
+    )
+    plan = models.ForeignKey(
+        PlanEntrenamiento, on_delete=models.CASCADE, related_name='sesiones'
+    )
+    fecha_inicio = models.DateTimeField(auto_now_add=True)
+    fecha_fin = models.DateTimeField(null=True, blank=True)
+    completada = models.BooleanField(default=False)
+    ejercicio_actual = models.PositiveIntegerField(
+        default=1, help_text="Orden del ejercicio en curso"
+    )
+
+    class Meta:
+        ordering = ['-fecha_inicio']
+        verbose_name = 'Sesión de entrenamiento'
+        verbose_name_plural = 'Sesiones de entrenamiento'
+
+    def __str__(self):
+        return f"{self.usuario.email} - Sesión {self.pk} - {self.fecha_inicio.date()}"
+
+
+class EjercicioSesion(models.Model):
+    """
+    Registra cada ejercicio completado dentro de una sesión.
+    """
+    sesion = models.ForeignKey(
+        SesionEntrenamiento, on_delete=models.CASCADE, related_name='ejercicios_completados'
+    )
+    rutina_ejercicio = models.ForeignKey(
+        RutinaEjercicio, on_delete=models.CASCADE
+    )
+    completado = models.BooleanField(default=False)
+    fecha_completado = models.DateTimeField(null=True, blank=True)
+    notas = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['rutina_ejercicio__orden']
+
+    def __str__(self):
+        return f"Sesión {self.sesion.pk} - {self.rutina_ejercicio.nombre}"

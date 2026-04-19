@@ -3,9 +3,11 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 
-from .models import Conversacion, PlanEntrenamiento, PlanAlimentacion, RutinaEjercicio
-from .serializers import PlanEntrenamientoSerializer, PlanAlimentacionSerializer, ConversacionSerializer
-
+from .models import Conversacion, PlanEntrenamiento, PlanAlimentacion, RutinaEjercicio, RutinaComida
+from .serializers import (
+    PlanEntrenamientoSerializer, PlanAlimentacionSerializer,
+    ConversacionSerializer
+)
 from . import ia_service
 
 
@@ -13,10 +15,22 @@ class GenerarPlanEntrenamientoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        # Verifica si ya tiene un plan activo
+        plan_activo = PlanEntrenamiento.objects.filter(
+            usuario=request.user, activo=True
+        ).last()
+        if plan_activo:
+            return Response(
+                {
+                    'error': 'Ya tienes un plan de entrenamiento activo. Finalízalo antes de generar uno nuevo.',
+                    'plan_actual': PlanEntrenamientoSerializer(plan_activo).data
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             resultado = ia_service.generar_plan_entrenamiento(request.user)
-            
-            # Crear el plan
+
             plan = PlanEntrenamiento.objects.create(
                 usuario=request.user,
                 tipo_entrenamiento=resultado.get('tipo_entrenamiento', ''),
@@ -24,7 +38,7 @@ class GenerarPlanEntrenamientoAPIView(APIView):
                 duracion=resultado.get('duracion', 4),
             )
 
-            # Guardar cada ejercicio de la rutina en DB
+            # Guarda cada ejercicio de la rutina en DB
             ejercicios = resultado.get('ejercicios', [])
             for index, ejercicio in enumerate(ejercicios):
                 RutinaEjercicio.objects.create(
@@ -37,7 +51,6 @@ class GenerarPlanEntrenamientoAPIView(APIView):
                     orden=index + 1
                 )
 
-            # Guardar conversacion
             Conversacion.objects.create(
                 usuario=request.user,
                 tipo='plan_entrenamiento',
@@ -61,25 +74,71 @@ class GenerarPlanAlimentacionAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        # Verifica si ya tiene un plan de alimentación activo
+        plan_activo = PlanAlimentacion.objects.filter(
+            usuario=request.user, activo=True
+        ).last()
+        if plan_activo:
+            return Response(
+                {
+                    'error': 'Ya tienes un plan de alimentación activo. Finalízalo antes de generar uno nuevo.',
+                    'plan_actual': PlanAlimentacionSerializer(plan_activo).data
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         try:
             resultado = ia_service.generar_plan_alimentacion(request.user)
+
             plan = PlanAlimentacion.objects.create(
                 usuario=request.user,
                 calorias=resultado.get('calorias_diarias', 2000),
                 objetivo=resultado.get('objetivo', ''),
             )
+
+            # Guarda cada comida de la rutina en DB
+            comidas = resultado.get('comidas', [])
+            for index, comida in enumerate(comidas):
+                momento = comida.get('momento', 'Almuerzo').lower()
+                # Normaliza el momento al choice correcto
+                momento_map = {
+                    'desayuno': 'desayuno',
+                    'almuerzo': 'almuerzo',
+                    'cena': 'cena',
+                    'merienda': 'merienda',
+                    'snack': 'merienda',
+                }
+                momento_normalizado = momento_map.get(momento, 'merienda')
+
+                RutinaComida.objects.create(
+                    plan=plan,
+                    nombre=comida.get('nombre', ''),
+                    momento=momento_normalizado,
+                    calorias=comida.get('calorias', 0),
+                    proteinas=comida.get('proteinas', 0),
+                    carbohidratos=comida.get('carbohidratos', 0),
+                    grasas=comida.get('grasas', 0),
+                    descripcion=comida.get('descripcion', ''),
+                    orden=index + 1
+                )
+
             Conversacion.objects.create(
                 usuario=request.user,
                 tipo='plan_alimentacion',
                 mensaje_usuario='Generar plan de alimentación',
                 respuesta_ia=str(resultado)
             )
+
             return Response({
                 'plan': PlanAlimentacionSerializer(plan).data,
                 'detalle': resultado
             }, status=status.HTTP_201_CREATED)
+
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class AnalizarProgresoAPIView(APIView):
@@ -130,25 +189,5 @@ class HistorialConversacionAPIView(APIView):
         conversaciones = request.user.conversaciones.all()
         if tipo:
             conversaciones = conversaciones.filter(tipo=tipo)
-        data = [{
-            'id': c.id,
-            'tipo': c.tipo,
-            'mensaje_usuario': c.mensaje_usuario,
-            'respuesta_ia': c.respuesta_ia,
-            'fecha': c.fecha
-        } for c in conversaciones[:20]]
-        return Response(data)
-    
-
-class HistorialConversacionAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        tipo = request.query_params.get('tipo', None)
-        conversaciones = request.user.conversaciones.all()
-        if tipo:
-            conversaciones = conversaciones.filter(tipo=tipo)
         serializer = ConversacionSerializer(conversaciones[:20], many=True)
         return Response(serializer.data)
-    
-    
