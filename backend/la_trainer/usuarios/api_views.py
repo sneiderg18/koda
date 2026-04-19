@@ -6,16 +6,15 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import (
     Ejercicio, PlanEntrenamiento, PlanAlimentacion, Progreso,
-    Comida, RutinaEjercicio, RutinaComida, RegistroActividad,
-    ProgresoAlimentacion, SesionEntrenamiento, EjercicioSesion
+    Comida, RutinaEjercicio, RutinaComida, RegistroActividad, ProgresoAlimentacion,
+    SesionEntrenamiento, EjercicioSesion
 )
 from .serializers import (
     RegistroSerializer, UsuarioSerializer, EjercicioSerializer,
     PlanEntrenamientoSerializer, PlanAlimentacionSerializer,
     ComidaSerializer, ProgresoSerializer, RutinaEjercicioSerializer,
-    RutinaComidaSerializer, RegistroActividadSerializer,
-    ProgresoAlimentacionSerializer, SesionEntrenamientoSerializer,
-    EjercicioSesionSerializer
+    RutinaComidaSerializer, RegistroActividadSerializer, ProgresoAlimentacionSerializer,
+    SesionEntrenamientoSerializer, EjercicioSesionSerializer
 )
 
 
@@ -414,7 +413,8 @@ class OnboardingAPIView(APIView):
             })
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# ─── Completar sesión ──────────────────────────────────────────
+
+# ─── Completar sesión de entrenamiento ────────────────────────
 class CompletarSesionAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -518,9 +518,29 @@ class ProgresoAlimentacionAPIView(APIView):
                 {'error': 'Ya registraste tu alimentación de hoy. Usa PUT para editarlo.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Asociar automáticamente al plan de alimentación activo
+        plan_activo = PlanAlimentacion.objects.filter(
+            usuario=request.user, activo=True
+        ).last()
+
         serializer = ProgresoAlimentacionSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(usuario=request.user)
+            serializer.save(usuario=request.user, plan=plan_activo)
+
+            # Actualizar contador de días completados en el plan
+            if plan_activo:
+                plan_activo.dias_completados = ProgresoAlimentacion.objects.filter(
+                    usuario=request.user, plan=plan_activo
+                ).count()
+                # Si llegó a la duración del plan, marcarlo como completado automáticamente
+                if plan_activo.dias_completados >= plan_activo.duracion_dias:
+                    from django.utils import timezone
+                    plan_activo.completado = True
+                    plan_activo.activo = False
+                    plan_activo.fecha_completado = timezone.now()
+                plan_activo.save()
+
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -557,6 +577,7 @@ class ProgresoAlimentacionDetalleAPIView(APIView):
         registro.delete()
         return Response({'mensaje': 'Registro eliminado correctamente.'}, status=status.HTTP_200_OK)
 
+
 # ─── Sesión de entrenamiento en tiempo real ───────────────────
 
 class IniciarSesionAPIView(APIView):
@@ -564,8 +585,7 @@ class IniciarSesionAPIView(APIView):
     POST /api/sesion/iniciar/
     El usuario presiona 'Empezar rutina'. Crea la sesión y
     devuelve todos los ejercicios listos para recorrer uno a uno.
-    Si ya hay una sesión activa sin completar la devuelve
-    en lugar de crear una nueva.
+    Si ya hay una sesión activa sin completar la devuelve en lugar de crear una nueva.
     """
     permission_classes = [IsAuthenticated]
 
@@ -580,7 +600,7 @@ class IniciarSesionAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Si ya hay una sesión abierta hoy la reutiliza
+        # Si ya hay una sesión abierta la reutiliza
         sesion_abierta = SesionEntrenamiento.objects.filter(
             usuario=request.user,
             plan=plan,
@@ -624,7 +644,6 @@ class CompletarEjercicioAPIView(APIView):
     def post(self, request, sesion_id, ejercicio_sesion_id):
         from django.utils import timezone
 
-        # Verificar que la sesión pertenece al usuario
         try:
             sesion = SesionEntrenamiento.objects.get(
                 pk=sesion_id, usuario=request.user
@@ -641,7 +660,6 @@ class CompletarEjercicioAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Verificar que el ejercicio pertenece a esta sesión
         try:
             ejercicio_sesion = EjercicioSesion.objects.get(
                 pk=ejercicio_sesion_id, sesion=sesion
@@ -664,7 +682,6 @@ class CompletarEjercicioAPIView(APIView):
         ).order_by('rutina_ejercicio__orden').first()
 
         if siguiente:
-            # Actualizar ejercicio_actual en la sesión
             sesion.ejercicio_actual = siguiente.rutina_ejercicio.orden
             sesion.save()
 
@@ -704,7 +721,6 @@ class CompletarEjercicioAPIView(APIView):
 
             plan.save()
 
-            # Registrar en calendario de actividad
             RegistroActividad.objects.create(
                 usuario=request.user,
                 plan=plan,

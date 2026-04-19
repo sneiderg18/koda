@@ -27,6 +27,7 @@ urlpatterns = [
     # ─── Planes alimentación (específicas antes de <pk>) ─────
     path('planes/alimentacion/', api_views.PlanAlimentacionAPIView.as_view(), name='api_planes_alimentacion'),
     path('planes/alimentacion/activo/', api_views.PlanAlimentacionActivoAPIView.as_view(), name='api_plan_alimentacion_activo'),
+    path('planes/alimentacion/completar/', ia_views.CompletarPlanAlimentacionAPIView.as_view(), name='api_completar_plan_alimentacion'),
     path('planes/alimentacion/<int:pk>/', api_views.PlanAlimentacionDetalleAPIView.as_view(), name='api_plan_alimentacion_detalle'),
     path('planes/alimentacion/<int:pk>/comidas/', api_views.RutinaComidaAPIView.as_view(), name='api_rutina_comida'),
 

@@ -55,10 +55,39 @@ def generar_plan_entrenamiento(usuario):
     return json.loads(_limpiar_json(respuesta.text))
 
 
-def generar_plan_alimentacion(usuario):
+def generar_plan_alimentacion(usuario, plan_anterior=None):
+    """
+    Genera un plan de alimentación personalizado.
+    Si existe un plan_anterior completado, la IA lo usa como contexto
+    para ajustar calorías y macros según el progreso real del usuario.
+    """
+    # Construir historial de cumplimiento si existe
+    progreso_alimentacion = usuario.progreso_alimentacion.all()[:14]
+    historial_alimentacion = ''
+    if progreso_alimentacion:
+        historial_alimentacion = '\n'.join([
+            f"- {p.fecha}: cumplimiento={p.nivel_cumplimiento}, "
+            f"calorias={p.calorias_consumidas or 'no registrado'}, "
+            f"agua={p.agua_consumida or 'no registrado'}L, notas={p.notas or 'ninguna'}"
+            for p in progreso_alimentacion
+        ])
+
+    # Info del plan anterior si existe
+    info_plan_anterior = ''
+    if plan_anterior:
+        info_plan_anterior = f"""
+    Plan anterior completado:
+    - Calorías diarias: {plan_anterior.calorias} kcal
+    - Objetivo: {plan_anterior.objetivo}
+    - Días completados: {plan_anterior.dias_completados} de {plan_anterior.duracion_dias}
+    """
+
+    comidas_por_dia = usuario.comidas_por_dia or 3
+
     prompt = f"""
-    Eres un nutricionista experto. Genera un plan de alimentación personalizado en español.
-    
+    Eres un nutricionista experto. Genera un plan de alimentación COMPLETO y DETALLADO personalizado en español.
+    {"Este es un plan de SEGUIMIENTO basado en el progreso registrado. Ajusta calorías y macros según el avance." if plan_anterior else "Este es el PRIMER plan del usuario."}
+
     Datos del usuario:
     - Nombre: {usuario.username}
     - Edad: {usuario.edad or 'No especificada'}
@@ -67,14 +96,27 @@ def generar_plan_alimentacion(usuario):
     - Objetivo: {usuario.objetivo or 'No especificado'}
     - Alergias: {usuario.alergias or 'Ninguna'}
     - Restricciones alimentarias: {usuario.restricciones_alimentarias or 'Ninguna'}
-    - Comidas por día: {usuario.comidas_por_dia or 'No especificado'}
+    - Comidas por día: {comidas_por_dia}
     - Condiciones médicas: {usuario.condiciones_medicas or 'Ninguna'}
-    
+    {info_plan_anterior}
+    Historial de cumplimiento (últimos 14 días):
+    {historial_alimentacion if historial_alimentacion else 'Sin registros aún - primer plan'}
+
+    INSTRUCCIONES:
+    - Genera EXACTAMENTE {comidas_por_dia} comidas (según las comidas por día del usuario)
+    - Cada comida debe tener receta COMPLETA con ingredientes y pasos de preparación
+    - Los ingredientes deben incluir cantidades exactas (gramos, tazas, unidades)
+    - La preparación debe ser clara, paso a paso, en español sencillo
+    - Si el cumplimiento fue "excelente" o "bueno" de forma consistente, ajusta levemente las calorías
+    - Si el cumplimiento fue "regular" o "malo", simplifica las recetas para que sean más fáciles de seguir
+    - Respeta estrictamente las alergias y restricciones alimentarias
+
     Responde SOLO con un JSON válido con esta estructura exacta:
     {{
         "calorias_diarias": numero,
         "objetivo": "objetivo nutricional",
         "descripcion": "descripcion general del plan",
+        "duracion_dias": 30,
         "comidas": [
             {{
                 "nombre": "nombre de la comida",
@@ -83,7 +125,10 @@ def generar_plan_alimentacion(usuario):
                 "proteinas": numero,
                 "carbohidratos": numero,
                 "grasas": numero,
-                "descripcion": "descripcion de la comida"
+                "descripcion": "descripcion breve de la comida",
+                "ingredientes": "- 2 huevos\\n- 1 taza de avena (90g)\\n- 1 banano\\n- 200ml leche descremada",
+                "preparacion": "1. Calentar la leche a fuego medio.\\n2. Agregar la avena y revolver 5 minutos.\\n3. Servir con el banano en rodajas.",
+                "tiempo_preparacion": 15
             }}
         ]
     }}

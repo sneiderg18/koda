@@ -88,15 +88,21 @@ class GenerarPlanAlimentacionAPIView(APIView):
             )
 
         try:
-            resultado = ia_service.generar_plan_alimentacion(request.user)
+            # Buscar el último plan completado para pasarlo como contexto a la IA
+            plan_anterior = PlanAlimentacion.objects.filter(
+                usuario=request.user, completado=True
+            ).last()
+
+            resultado = ia_service.generar_plan_alimentacion(request.user, plan_anterior)
 
             plan = PlanAlimentacion.objects.create(
                 usuario=request.user,
                 calorias=resultado.get('calorias_diarias', 2000),
                 objetivo=resultado.get('objetivo', ''),
+                duracion_dias=resultado.get('duracion_dias', 30),
             )
 
-            # Guarda cada comida de la rutina en DB
+            # Guarda cada comida de la rutina en DB con receta completa
             comidas = resultado.get('comidas', [])
             for index, comida in enumerate(comidas):
                 momento = comida.get('momento', 'Almuerzo').lower()
@@ -119,6 +125,9 @@ class GenerarPlanAlimentacionAPIView(APIView):
                     carbohidratos=comida.get('carbohidratos', 0),
                     grasas=comida.get('grasas', 0),
                     descripcion=comida.get('descripcion', ''),
+                    ingredientes=comida.get('ingredientes', ''),
+                    preparacion=comida.get('preparacion', ''),
+                    tiempo_preparacion=comida.get('tiempo_preparacion', 0),
                     orden=index + 1
                 )
 
@@ -191,3 +200,50 @@ class HistorialConversacionAPIView(APIView):
             conversaciones = conversaciones.filter(tipo=tipo)
         serializer = ConversacionSerializer(conversaciones[:20], many=True)
         return Response(serializer.data)
+
+
+class CompletarPlanAlimentacionAPIView(APIView):
+    """
+    POST /api/planes/alimentacion/completar/
+    El usuario aprueba/finaliza el plan actual.
+    Marca el plan como completado y activo=False.
+    El próximo plan que genere la IA tomará en cuenta el progreso registrado.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from django.utils import timezone
+        from .models import ProgresoAlimentacion
+
+        plan = PlanAlimentacion.objects.filter(
+            usuario=request.user, activo=True
+        ).last()
+
+        if not plan:
+            return Response(
+                {'error': 'No tienes un plan de alimentación activo.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Contar días con registro de progreso dentro de este plan
+        dias_con_registro = ProgresoAlimentacion.objects.filter(
+            usuario=request.user,
+            plan=plan
+        ).count()
+
+        plan.dias_completados = dias_con_registro
+        plan.completado = True
+        plan.activo = False
+        plan.fecha_completado = timezone.now()
+        plan.save()
+
+        return Response({
+            'mensaje': (
+                f'Plan de alimentación completado. Seguiste el plan {dias_con_registro} '
+                f'de {plan.duracion_dias} días. '
+                'Ya puedes generar un nuevo plan desde /api/ia/plan/alimentacion/'
+            ),
+            'dias_completados': dias_con_registro,
+            'duracion_dias': plan.duracion_dias,
+            'plan_completado': True,
+        }, status=status.HTTP_200_OK)

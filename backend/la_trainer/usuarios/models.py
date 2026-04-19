@@ -123,6 +123,11 @@ class PlanAlimentacion(models.Model):
     calorias = models.IntegerField()
     objetivo = models.CharField(max_length=500)
     activo = models.BooleanField(default=True)
+    # ─── Campos de seguimiento (igual que PlanEntrenamiento) ──
+    completado = models.BooleanField(default=False)
+    fecha_completado = models.DateTimeField(null=True, blank=True)
+    duracion_dias = models.PositiveIntegerField(default=30, help_text="Duración del plan en días")
+    dias_completados = models.PositiveIntegerField(default=0, help_text="Días con registro de cumplimiento")
     creado_en = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
@@ -215,6 +220,10 @@ class RutinaComida(models.Model):
     carbohidratos = models.FloatField(default=0)
     grasas = models.FloatField(default=0)
     descripcion = models.TextField(blank=True)
+    # ─── Campos de receta completa ────────────────────────────
+    ingredientes = models.TextField(blank=True, help_text="Lista de ingredientes con cantidades")
+    preparacion = models.TextField(blank=True, help_text="Pasos para preparar la comida")
+    tiempo_preparacion = models.PositiveIntegerField(default=0, help_text="Tiempo en minutos")
     orden = models.PositiveIntegerField(default=1)
 
     class Meta:
@@ -222,6 +231,7 @@ class RutinaComida(models.Model):
 
     def __str__(self):
         return f"{self.nombre} - Plan {self.plan.pk}"
+
 
 class RegistroActividad(models.Model):
     """Registra cada sesión completada — sirve como calendario de constancia."""
@@ -271,6 +281,7 @@ class ProgresoAlimentacion(models.Model):
     def __str__(self):
         return f"{self.usuario.email} - Alimentación {self.fecha}"
 
+
 class SesionEntrenamiento(models.Model):
     """
     Representa una sesión de entrenamiento en tiempo real.
@@ -300,9 +311,7 @@ class SesionEntrenamiento(models.Model):
 
 
 class EjercicioSesion(models.Model):
-    """
-    Registra cada ejercicio completado dentro de una sesión.
-    """
+    """Registra cada ejercicio completado dentro de una sesión."""
     sesion = models.ForeignKey(
         SesionEntrenamiento, on_delete=models.CASCADE, related_name='ejercicios_completados'
     )
