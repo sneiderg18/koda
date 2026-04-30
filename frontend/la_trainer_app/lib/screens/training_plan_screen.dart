@@ -5,10 +5,11 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../services/auth_service.dart';
 import 'login_screen.dart';
+import 'pantalla_detalles.dart';
 
-const _kRed     = Color(0xFFD72105);
-const _kBgLight = Color(0xFFF5F7FA);
-const _kDark    = Color(0xFF1A1A2E);
+const _kRed  = Color(0xFFD72105);
+const _kBg   = Color(0xFF0D0D0D);
+const _kCard = Color(0xFF1C1C1C);
 
 class TrainingPlanScreen extends StatefulWidget {
   const TrainingPlanScreen({super.key});
@@ -18,10 +19,11 @@ class TrainingPlanScreen extends StatefulWidget {
 }
 
 class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
-  bool _loading = true;
+  bool _loading   = true;
+  bool _generando = false; // mientras la IA crea el plan
   String? _error;
 
-  Map<String, dynamic>? _detalle;
+  Map<String, dynamic>? _plan;
   List<dynamic> _ejercicios = [];
 
   @override
@@ -30,7 +32,6 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     _loadPlan();
   }
 
-  // ── Redirige al Login limpiando la sesión ─────────────────────────────────
   Future<void> _goToLogin() async {
     await AuthService.logout();
     if (!mounted) return;
@@ -41,21 +42,14 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
-  // ── Carga el plan completo ─────────────────────────────────────────────────
   Future<void> _loadPlan() async {
     setState(() {
       _loading = true;
-      _error   = null;
+      _error = null;
     });
-
     try {
-      // 1. Token válido (refresca automáticamente si expiró)
       final token = await AuthService.getValidToken();
-
-      if (token == null) {
-        await _goToLogin();
-        return;
-      }
+      if (token == null) { await _goToLogin(); return; }
 
       final headers = {
         'Content-Type': 'application/json',
@@ -63,90 +57,37 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
         'Authorization': 'Bearer $token',
       };
 
-      // 2. Obtener perfil
-      final perfilRes = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
+      final res = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/planes/entrenamiento/activo/'),
         headers: headers,
       );
 
       if (!mounted) return;
+      if (res.statusCode == 401) { await _goToLogin(); return; }
 
-      if (perfilRes.statusCode == 401) {
-        await _goToLogin();
-        return;
-      }
+      if (res.statusCode == 200) {
+        final body      = jsonDecode(res.body) as Map<String, dynamic>;
+        final tienePlan = body['tiene_plan_activo'] == true;
 
-      if (perfilRes.statusCode != 200) {
-        setState(() {
-          _error   = 'No se pudo obtener el perfil (${perfilRes.statusCode})';
-          _loading = false;
-        });
-        return;
-      }
-
-      final perfil = jsonDecode(perfilRes.body) as Map<String, dynamic>;
-
-      // 3. Construir body
-      final body = <String, dynamic>{};
-
-      const camposNum = [
-        'edad', 'peso', 'altura', 'dias_entrenamiento',
-        'tiempo_sesion', 'comidas_por_dia', 'agua_por_dia',
-      ];
-      const camposStr = [
-        'genero', 'objetivo', 'motivacion', 'nivel_actividad',
-        'lugar_entrenamiento', 'restricciones_alimentarias',
-        'calidad_sueno', 'nivel_estres', 'objetivo_tiempo',
-        'condiciones_medicas', 'alergias', 'lesiones',
-      ];
-
-      for (final k in camposNum) {
-        if (perfil[k] != null) body[k] = perfil[k];
-      }
-      for (final k in camposStr) {
-        if (perfil[k] != null && perfil[k].toString().isNotEmpty) {
-          body[k] = perfil[k];
+        if (!tienePlan) {
+          setState(() {
+            _error   = 'Aún no tienes un plan de entrenamiento activo.\nHabla con el coach para generar uno.';
+            _loading = false;
+          });
+          return;
         }
-      }
-      if (perfil['tiene_equipo'] != null) {
-        body['tiene_equipo'] = perfil['tiene_equipo'];
-      }
 
-      // 4. Llamar al endpoint del plan de entrenamiento
-      final planRes = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/ia/plan/entrenamiento/'),
-        headers: headers,
-        body: jsonEncode(body),
-      );
-
-      if (!mounted) return;
-
-      if (planRes.statusCode == 401) {
-        await _goToLogin();
-        return;
-      }
-
-      if (planRes.statusCode == 200 || planRes.statusCode == 201) {
-        final respBody = jsonDecode(planRes.body) as Map<String, dynamic>;
-
-        final plan = (respBody['plan'] is Map)
-            ? Map<String, dynamic>.from(respBody['plan'] as Map)
-            : <String, dynamic>{};
-
-        final detalle = (respBody['detalle'] is Map)
-            ? Map<String, dynamic>.from(respBody['detalle'] as Map)
-            : <String, dynamic>{};
-
+        final plan   = Map<String, dynamic>.from(body['plan'] as Map);
         final rutina = plan['rutina_ejercicios'];
 
         setState(() {
-          _detalle    = detalle.isNotEmpty ? detalle : plan;
+          _plan       = plan;
           _ejercicios = rutina is List ? List<dynamic>.from(rutina) : [];
           _loading    = false;
         });
       } else {
         setState(() {
-          _error   = 'Error al generar el plan (${planRes.statusCode})';
+          _error   = 'Error al cargar el plan (${res.statusCode})';
           _loading = false;
         });
       }
@@ -160,314 +101,331 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     }
   }
 
-  // ── Colores por grupo muscular ─────────────────────────────────────────────
-  Color _muscleColor(String grupo) {
-    final g = grupo.toLowerCase();
-    if (g.contains('pierna') || g.contains('glút'))                    return const Color(0xFF4F6EF7);
-    if (g.contains('pecho')  || g.contains('trícep') || g.contains('tricep')) return const Color(0xFF43C6AC);
-    if (g.contains('espalda')|| g.contains('bícep')  || g.contains('bicep'))  return const Color(0xFFFF9800);
-    if (g.contains('hombro'))                                           return const Color(0xFF9C27B0);
-    if (g.contains('core')   || g.contains('abdomi'))                  return _kRed;
-    if (g.contains('isquio'))                                           return const Color(0xFF00BCD4);
-    return const Color(0xFF607D8B);
+  // ── Genera plan con IA ────────────────────────────────────────────────────
+  Future<void> _generarPlan() async {
+    setState(() => _generando = true);
+
+    try {
+      final token = await AuthService.getValidToken();
+      if (token == null) { await _goToLogin(); return; }
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+        'Authorization': 'Bearer $token',
+      };
+
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/ia/plan/entrenamiento/'),
+        headers: headers,
+      );
+
+      if (!mounted) return;
+
+      if (res.statusCode == 201 || res.statusCode == 200) {
+        // Plan generado — recargar la pantalla
+        await _loadPlan();
+      } else {
+        final body = jsonDecode(res.body);
+        final msg  = body['error'] ?? 'No se pudo generar el plan (${res.statusCode})';
+        setState(() {
+          _error    = msg.toString();
+          _generando = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error    = 'No se pudo conectar con el servidor.';
+          _generando = false;
+        });
+      }
+    }
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
+  // ── Inicia sesión en la API y luego navega ────────────────────────────────
+  Future<void> _iniciarSesion() async {
+    try {
+      final token = await AuthService.getValidToken();
+      if (token == null) { await _goToLogin(); return; }
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'ngrok-skip-browser-warning': 'true',
+        'Authorization': 'Bearer $token',
+      };
+
+      // Llama a /api/sesion/iniciar/ — si ya hay sesión abierta la reutiliza
+      final res = await http.post(
+        Uri.parse('${ApiConfig.baseUrl}/api/sesion/iniciar/'),
+        headers: headers,
+      );
+
+      if (!mounted) return;
+      if (res.statusCode == 401) { await _goToLogin(); return; }
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        // Sesión creada o retomada → ir a la pantalla de detalles
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PantallaDetalles()),
+        );
+      } else {
+        final body = jsonDecode(res.body);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(body['error'] ?? 'No se pudo iniciar la sesión'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo conectar con el servidor'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  String _duracionEstimada() => '${_ejercicios.length * 4} mins';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _kBgLight,
-      appBar: _buildAppBar(),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _kRed))
-          : _error != null
-              ? _buildError()
-              : RefreshIndicator(
-                  color: _kRed,
-                  onRefresh: _loadPlan,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                    children: [
-                      _buildHeaderCard(),
-                      const SizedBox(height: 20),
-                      if (_detalle?['descripcion'] != null) ...[
-                        _buildDescripcion(),
-                        const SizedBox(height: 20),
-                      ],
-                      _buildSectionTitle('Rutina de ejercicios', Icons.fitness_center_rounded),
-                      const SizedBox(height: 12),
-                      if (_ejercicios.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Center(
-                            child: Text(
-                              'No se encontraron ejercicios en el plan.',
-                              style: TextStyle(color: Colors.grey, fontSize: 14),
-                            ),
-                          ),
-                        )
-                      else
-                        ..._ejercicios.asMap().entries.map(
-                              (e) => _buildExerciseCard(e.value, e.key + 1),
-                            ),
-                    ],
+      backgroundColor: _kBg,
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                child: _loading
+                    ? const Center(
+                        child: CircularProgressIndicator(color: _kRed))
+                    : _error != null
+                        ? _buildError()
+                        : _buildBody(),
+              ),
+            ],
+          ),
+
+          // ── Botón EMPEZAR SESIÓN flotante ──────────────────────────
+          if (!_loading && _error == null && _ejercicios.isNotEmpty)
+            Positioned(
+              bottom: 24,
+              left: 24,
+              right: 24,
+              child: SizedBox(
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: _iniciarSesion,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _kRed,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30),
+                    ),
+                    elevation: 6,
+                    shadowColor: _kRed.withOpacity(0.5),
+                  ),
+                  child: Text(
+                    'EMPEZAR SESIÓN',
+                    style: GoogleFonts.bebasNeue(
+                      fontSize: 20,
+                      color: Colors.white,
+                      letterSpacing: 2,
+                    ),
                   ),
                 ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      centerTitle: true,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _kDark),
-        onPressed: () => Navigator.pop(context),
-      ),
-      title: Text(
-        'Plan de Entrenamiento',
-        style: GoogleFonts.bebasNeue(fontSize: 22, color: _kDark, letterSpacing: 1.5),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.refresh_rounded, color: _kRed),
-          onPressed: _loadPlan,
-        ),
-      ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(color: const Color(0xFFEEEEEE), height: 1),
-      ),
-    );
-  }
-
-  Widget _buildHeaderCard() {
-    final tipo     = _detalle?['tipo_entrenamiento'] ?? _detalle?['nombre'] ?? 'Plan de Entrenamiento';
-    final nivel    = _detalle?['nivel']    ?? '—';
-    final duracion = _detalle?['duracion'];
-    final total    = _ejercicios.length;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [_kRed, Color(0xFFD90B1C)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: _kRed.withOpacity(0.3), blurRadius: 14, offset: const Offset(0, 5)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.bolt_rounded, color: Colors.white, size: 22),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(tipo.toString(),
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
               ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            children: [
-              _metricChip(Icons.signal_cellular_alt_rounded, nivel.toString()),
-              if (duracion != null)
-                _metricChip(Icons.calendar_today_rounded, '$duracion semanas'),
-              _metricChip(Icons.list_alt_rounded, '$total ejercicios'),
-            ],
-          ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _metricChip(IconData icon, String label) {
+  // ── Header rojo con título y botón HOME ───────────────────────────────────
+  Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(30),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: Colors.white, size: 13),
-          const SizedBox(width: 5),
-          Text(label,
-              style: const TextStyle(
-                  color: Colors.white, fontSize: 12, fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDescripcion() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.info_outline_rounded, color: _kRed, size: 18),
-              SizedBox(width: 8),
-              Text('Descripción del plan',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _kDark)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            _detalle!['descripcion'].toString(),
-            style: const TextStyle(color: Color(0xFF555555), fontSize: 13, height: 1.6),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, color: _kRed, size: 20),
-        const SizedBox(width: 8),
-        Text(title,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: _kDark)),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: _kRed.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text('${_ejercicios.length}',
-              style: const TextStyle(color: _kRed, fontSize: 12, fontWeight: FontWeight.bold)),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildExerciseCard(dynamic ejercicio, int index) {
-    final nombre   = ejercicio['nombre']        ?? 'Ejercicio';
-    final grupo    = ejercicio['grupo_muscular'] ?? '';
-    final series   = ejercicio['series']         ?? 0;
-    final reps     = ejercicio['repeticiones']   ?? 0;
-    final descanso = ejercicio['descanso']       ?? '—';
-    final color    = _muscleColor(grupo.toString());
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
-        ],
-      ),
-      child: IntrinsicHeight(
-        child: Row(
+      color: _kRed,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
           children: [
-            Container(
-              width: 5,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  bottomLeft: Radius.circular(16),
-                ),
-              ),
-            ),
-            Container(
-              width: 44,
-              alignment: Alignment.center,
-              child: Text(
-                '$index',
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: color.withOpacity(0.5)),
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(nombre.toString(),
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w600, fontSize: 14, color: _kDark)),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.1),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white, size: 14),
+                    label: Text(
+                      'HOME',
+                      style: GoogleFonts.bebasNeue(
+                        color: Colors.white,
+                        fontSize: 15,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.white54),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
+                      shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                       ),
-                      child: Text(grupo.toString(),
-                          style: TextStyle(
-                              fontSize: 11, color: color, fontWeight: FontWeight.w500)),
                     ),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      children: [
-                        _statBadge(Icons.repeat_rounded,         '$series series'),
-                        _statBadge(Icons.fitness_center_rounded, '$reps reps'),
-                        _statBadge(Icons.timer_outlined,          descanso.toString()),
-                      ],
-                    ),
-                  ],
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.refresh_rounded,
+                        color: Colors.white, size: 22),
+                    onPressed: _loadPlan,
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                'PLAN DE ENTRENAMIENTO',
+                style: GoogleFonts.bebasNeue(
+                  color: Colors.white,
+                  fontSize: 26,
+                  letterSpacing: 3,
                 ),
               ),
             ),
-            const SizedBox(width: 12),
           ],
         ),
       ),
     );
   }
 
-  Widget _statBadge(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: _kBgLight,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+  // ── Lista principal ───────────────────────────────────────────────────────
+  Widget _buildBody() {
+    final tipo  = _plan?['tipo_entrenamiento'] ?? 'Entrenamiento';
+    final nivel = _plan?['nivel']              ?? '';
+
+    return RefreshIndicator(
+      color: _kRed,
+      backgroundColor: _kCard,
+      onRefresh: _loadPlan,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
         children: [
-          Icon(icon, size: 12, color: Colors.grey[600]),
-          const SizedBox(width: 4),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 11, color: Colors.grey[700], fontWeight: FontWeight.w500)),
+          Text(
+            tipo.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(Icons.timer_outlined, color: _kRed, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                _duracionEstimada(),
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+              if (nivel.toString().isNotEmpty) ...[
+                const SizedBox(width: 14),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: _kRed.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    nivel.toString().toUpperCase(),
+                    style: const TextStyle(
+                      color: _kRed,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 20),
+          ..._ejercicios.map((e) => _buildEjercicioTile(e)),
         ],
       ),
     );
   }
 
+  // ── Tile individual de ejercicio ──────────────────────────────────────────
+  Widget _buildEjercicioTile(dynamic ejercicio) {
+    final nombre = ejercicio['nombre']        ?? 'Ejercicio';
+    final series = ejercicio['series']        ?? 0;
+    final reps   = ejercicio['repeticiones']  ?? 0;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: _kCard,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          // Círculo placeholder imagen
+          Container(
+            width: 64,
+            height: 64,
+            margin: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.grey[850],
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.fitness_center_rounded,
+                color: Colors.white24, size: 28),
+          ),
+          Expanded(
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$series sets x $reps reps',
+                    style: const TextStyle(
+                        color: Colors.white38, fontSize: 12),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    nombre.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
+    );
+  }
+
+  // ── Pantalla de error ─────────────────────────────────────────────────────
   Widget _buildError() {
-    final isAuthError = _error?.contains('401') == true ||
-        _error?.contains('sesión') == true;
+    final sinPlan = _error!.contains('plan');
 
     return Center(
       child: Padding(
@@ -476,33 +434,70 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              isAuthError ? Icons.lock_outline_rounded : Icons.cloud_off_rounded,
+              sinPlan
+                  ? Icons.fitness_center_rounded
+                  : Icons.cloud_off_rounded,
               size: 56,
-              color: Colors.grey[400],
+              color: Colors.grey[700],
             ),
             const SizedBox(height: 16),
             Text(
               _error!,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[600], fontSize: 15),
+              style: const TextStyle(
+                  color: Colors.white54, fontSize: 15, height: 1.5),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: isAuthError ? _goToLogin : _loadPlan,
-              icon: Icon(
-                isAuthError ? Icons.login_rounded : Icons.refresh_rounded,
-                size: 18,
+            const SizedBox(height: 24),
+
+            // Si no tiene plan → botón para generar con IA
+            if (sinPlan)
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _generando ? null : _generarPlan,
+                  icon: _generando
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Icon(Icons.auto_awesome_rounded,
+                          color: Colors.white, size: 20),
+                  label: Text(
+                    _generando ? 'Generando plan...' : 'GENERAR MI PLAN CON IA',
+                    style: GoogleFonts.bebasNeue(
+                      fontSize: 18,
+                      color: Colors.white,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _kRed,
+                    disabledBackgroundColor: _kRed.withOpacity(0.5),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30)),
+                    elevation: 6,
+                    shadowColor: _kRed.withOpacity(0.5),
+                  ),
+                ),
+              )
+            else
+              ElevatedButton.icon(
+                onPressed: _loadPlan,
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Reintentar'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kRed,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 24, vertical: 12),
+                  elevation: 0,
+                ),
               ),
-              label: Text(isAuthError ? 'Iniciar sesión' : 'Reintentar'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _kRed,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                elevation: 0,
-              ),
-            ),
           ],
         ),
       ),
