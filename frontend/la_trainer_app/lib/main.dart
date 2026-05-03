@@ -52,10 +52,12 @@ class _SplashRouterState extends State<_SplashRouter> {
     if (!mounted) return;
 
     if (token == null || token.isEmpty) {
-      // No hay sesión → ir al Login
       _goTo(const LoginScreen());
       return;
     }
+
+    // ── Registrar acceso diario (racha + calendario) ──────────────
+    await AuthService.registrarAcceso();
 
     // Hay token → verificar si completó el onboarding
     final onboardingDone = await AuthService.isOnboardingDone();
@@ -81,9 +83,7 @@ class _SplashRouterState extends State<_SplashRouter> {
     // Pantalla de carga mientras se verifica la sesión
     return const Scaffold(
       backgroundColor: Color(0xFF0d0d0d),
-      body: Center(
-        child: CircularProgressIndicator(color: Color(0xFFD72105)),
-      ),
+      body: Center(child: CircularProgressIndicator(color: Color(0xFFD72105))),
     );
   }
 }

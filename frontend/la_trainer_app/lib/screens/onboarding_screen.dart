@@ -5,7 +5,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../services/auth_service.dart';
-import 'coach_screen.dart';
 import 'home_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -41,14 +40,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _calidadSueno;
   String? _nivelEstres;
 
-  static const _kRed = Color(0xFFD72105);
+  static const _kRed    = Color(0xFFD72105);
   static const _kDarkBg = Color(0xFF0A0A0F);
   static const _kCardBg = Color(0xFF1A1A2E);
 
   final _generos = const {
     'Masculino':         'masculino',
     'Femenino':          'femenino',
-    'Otro':              'otro',
     'Prefiero no decir': 'prefiero_no_decir',
   };
 
@@ -85,7 +83,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     'Vegano':      'vegano',
     'Sin gluten':  'sin_gluten',
     'Sin lactosa': 'sin_lactosa',
-    'Otro':        'otro',
   };
 
   final _calidadesSueno = const {
@@ -150,17 +147,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (alergias.isNotEmpty)    body['alergias']            = alergias;
       if (lesiones.isNotEmpty)    body['lesiones']            = lesiones;
 
-      if (_genero                    != null) body['genero']                    = _generos[_genero!]!;
-      if (_objetivo                  != null) body['objetivo']                  = _objetivos[_objetivo!]!;
-      if (_motivacion                != null) body['motivacion']                = _motivaciones[_motivacion!]!;
-      if (_nivelActividad            != null) body['nivel_actividad']           = _nivelesActividad[_nivelActividad!]!;
-      if (_lugarEntrenamiento        != null) body['lugar_entrenamiento']       = _lugares[_lugarEntrenamiento!]!;
-      if (_restriccionesAlimentarias != null) body['restricciones_alimentarias']= _restricciones[_restriccionesAlimentarias!]!;
-      if (_calidadSueno              != null) body['calidad_sueno']             = _calidadesSueno[_calidadSueno!]!;
-      if (_nivelEstres               != null) body['nivel_estres']              = _nivelesEstres[_nivelEstres!]!;
-      if (_tieneEquipo               != null) body['tiene_equipo']              = _tieneEquipo == 'Sí';
-
-      print('>>> ONBOARDING BODY: ${jsonEncode(body)}');
+      if (_genero                    != null) body['genero']                     = _generos[_genero!]!;
+      if (_objetivo                  != null) body['objetivo']                   = _objetivos[_objetivo!]!;
+      if (_motivacion                != null) body['motivacion']                 = _motivaciones[_motivacion!]!;
+      if (_nivelActividad            != null) body['nivel_actividad']            = _nivelesActividad[_nivelActividad!]!;
+      if (_lugarEntrenamiento        != null) body['lugar_entrenamiento']        = _lugares[_lugarEntrenamiento!]!;
+      if (_restriccionesAlimentarias != null) body['restricciones_alimentarias'] = _restricciones[_restriccionesAlimentarias!]!;
+      if (_calidadSueno              != null) body['calidad_sueno']              = _calidadesSueno[_calidadSueno!]!;
+      if (_nivelEstres               != null) body['nivel_estres']               = _nivelesEstres[_nivelEstres!]!;
+      if (_tieneEquipo               != null) body['tiene_equipo']               = _tieneEquipo == 'Sí';
 
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/onboarding/'),
@@ -171,9 +166,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         },
         body: jsonEncode(body),
       );
-
-      print('>>> ONBOARDING STATUS: ${response.statusCode}');
-      print('>>> ONBOARDING RESPONSE: ${response.body}');
 
       if (!mounted) return;
 
@@ -218,7 +210,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // ── FONDO OSCURO PARA CONTRASTE ───────────────────────────────────────
       backgroundColor: _kDarkBg,
       appBar: _buildAppBar(),
       body: SingleChildScrollView(
@@ -229,7 +220,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
 
-              // ── Datos personales ────────────────────────────────────────
+              // ── Datos personales ──────────────────────────────────────
               _sectionTitle('Datos personales'),
               const SizedBox(height: 16),
               _buildRow([
@@ -244,7 +235,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ]),
               const SizedBox(height: 28),
 
-              // ── Objetivos ───────────────────────────────────────────────
+              // ── Objetivos ─────────────────────────────────────────────
               _sectionTitle('Objetivos'),
               const SizedBox(height: 16),
               _dropdown('Objetivo principal', _objetivos.keys.toList(), _objetivo,
@@ -258,7 +249,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   hint: 'Ej. Bajar 5kg en 3 meses', required: false),
               const SizedBox(height: 28),
 
-              // ── Entrenamiento ───────────────────────────────────────────
+              // ── Entrenamiento ─────────────────────────────────────────
               _sectionTitle('Entrenamiento'),
               const SizedBox(height: 16),
               _dropdown('Nivel de actividad', _nivelesActividad.keys.toList(),
@@ -279,7 +270,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   (v) => setState(() => _tieneEquipo = v)),
               const SizedBox(height: 28),
 
-              // ── Salud ───────────────────────────────────────────────────
+              // ── Salud ─────────────────────────────────────────────────
               _sectionTitle('Salud'),
               const SizedBox(height: 16),
               _textField(_condicionesMedicasCtrl, 'Condiciones médicas',
@@ -295,7 +286,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   hint: 'Ej. Dolor de rodilla derecha', required: false),
               const SizedBox(height: 28),
 
-              // ── Alimentación ────────────────────────────────────────────
+              // ── Alimentación ──────────────────────────────────────────
               _sectionTitle('Alimentación'),
               const SizedBox(height: 16),
               _dropdown('Restricciones alimentarias', _restricciones.keys.toList(),
@@ -310,7 +301,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ]),
               const SizedBox(height: 28),
 
-              // ── Hábitos ─────────────────────────────────────────────────
+              // ── Hábitos ───────────────────────────────────────────────
               _sectionTitle('Hábitos'),
               const SizedBox(height: 16),
               _dropdown('Calidad del sueño', _calidadesSueno.keys.toList(),
@@ -322,7 +313,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   (v) => setState(() => _nivelEstres = v)),
               const SizedBox(height: 40),
 
-              // ── Botón con estilo deportivo ──────────────────────────────
               _buildSportButton(),
               const SizedBox(height: 20),
             ],
@@ -332,7 +322,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ── AppBar con estilo deportivo ───────────────────────────────────────────
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: _kRed,
@@ -349,7 +338,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
       ),
       title: Text(
-        'Cuentanos sobre ti',
+        'Cuéntanos sobre ti',
         style: GoogleFonts.bebasNeue(
           fontSize: 24,
           color: Colors.white,
@@ -363,7 +352,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // ── Botón con efecto deportivo ────────────────────────────────────────────
   Widget _buildSportButton() {
     return Container(
       decoration: BoxDecoration(
@@ -391,19 +379,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ? const SizedBox(
                   width: 22, height: 22,
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-              : Text('CONTINUAR',
+              : Text(
+                  'CONTINUAR',
                   style: GoogleFonts.bebasNeue(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                     letterSpacing: 1.5,
-                  )),
+                  ),
+                ),
         ),
       ),
     );
   }
 
-  // ── Título de sección con estilo deportivo ────────────────────────────────
   Widget _sectionTitle(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 4),
         child: Row(
@@ -417,12 +406,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
             const SizedBox(width: 10),
-            Text(text,
-                style: GoogleFonts.bebasNeue(
-                  fontSize: 18,
-                  color: Colors.white,
-                  letterSpacing: 1,
-                )),
+            Text(
+              text,
+              style: GoogleFonts.bebasNeue(
+                fontSize: 18,
+                color: Colors.white,
+                letterSpacing: 1,
+              ),
+            ),
           ],
         ),
       );
@@ -436,34 +427,57 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Row(children: withGaps);
   }
 
-  Widget _numField(TextEditingController ctrl, String label, IconData icon,
-      {String hint = '', bool isInt = false, bool required = true}) {
+  Widget _numField(
+    TextEditingController ctrl,
+    String label,
+    IconData icon, {
+    String hint = '',
+    bool isInt = false,
+    bool required = true,
+  }) {
     return TextFormField(
       controller: ctrl,
       style: const TextStyle(color: Colors.white),
-      keyboardType: isInt ? TextInputType.number : const TextInputType.numberWithOptions(decimal: true),
+      keyboardType: isInt
+          ? TextInputType.number
+          : const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
         isInt
             ? FilteringTextInputFormatter.digitsOnly
             : FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
       ],
       decoration: _deco(label, icon, hint),
-      validator: required ? (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null : null,
+      validator: required
+          ? (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null
+          : null,
     );
   }
 
-  Widget _textField(TextEditingController ctrl, String label, IconData icon,
-      {String hint = '', bool required = true}) {
+  Widget _textField(
+    TextEditingController ctrl,
+    String label,
+    IconData icon, {
+    String hint = '',
+    bool required = true,
+  }) {
     return TextFormField(
       controller: ctrl,
       style: const TextStyle(color: Colors.white),
       decoration: _deco(label, icon, hint),
-      validator: required ? (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null : null,
+      validator: required
+          ? (v) => (v == null || v.trim().isEmpty) ? 'Requerido' : null
+          : null,
     );
   }
 
-  Widget _dropdown(String label, List<String> items, String? value, IconData icon,
-      void Function(String?) onChanged, {bool required = true}) {
+  Widget _dropdown(
+    String label,
+    List<String> items,
+    String? value,
+    IconData icon,
+    void Function(String?) onChanged, {
+    bool required = true,
+  }) {
     return DropdownButtonFormField<String>(
       value: value,
       dropdownColor: _kCardBg,
@@ -484,7 +498,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       labelStyle: TextStyle(color: Colors.grey[400], fontSize: 12),
       prefixIcon: Icon(icon, color: _kRed, size: 20),
       filled: true,
-      // ── Fondo oscuro para los campos ─────────────────────────────────────
       fillColor: _kCardBg,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
