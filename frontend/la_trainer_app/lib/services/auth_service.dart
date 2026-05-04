@@ -4,9 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 
 class AuthService {
-  static const _keyAccess    = 'access_token';
-  static const _keyRefresh   = 'refresh_token';
-  static const _keyUsername  = 'username';
+  static const _keyAccess = 'access_token';
+  static const _keyRefresh = 'refresh_token';
+  static const _keyUsername = 'username';
   static const _keyOnboarding = 'onboarding_done';
 
   // ── GUARDAR TOKENS ─────────────────────────────────────────────────────────
@@ -40,25 +40,27 @@ class AuthService {
   /// Devuelve un access token fresco, o null si la sesión expiró del todo.
   /// Llama a /api/perfil/ para verificar; si da 401 intenta el refresh.
   static Future<String?> getValidToken() async {
-    final prefs   = await SharedPreferences.getInstance();
-    final access  = prefs.getString(_keyAccess);
+    final prefs = await SharedPreferences.getInstance();
+    final access = prefs.getString(_keyAccess);
     final refresh = prefs.getString(_keyRefresh);
 
     if (access == null) return null;
 
     try {
-      final testRes = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-          'Authorization': 'Bearer $access',
-        },
-      ).timeout(const Duration(seconds: 6));
+      final testRes = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
+            headers: {
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+              'Authorization': 'Bearer $access',
+            },
+          )
+          .timeout(const Duration(seconds: 6));
 
-      if (testRes.statusCode == 200) return access;          // token vigente
+      if (testRes.statusCode == 200) return access; // token vigente
       if (testRes.statusCode == 401 && refresh != null) {
-        return await _refreshToken(refresh);                 // intentar refrescar
+        return await _refreshToken(refresh); // intentar refrescar
       }
     } catch (_) {
       // Sin red: devolver el token actual y dejar que falle con mensaje claro
@@ -71,23 +73,26 @@ class AuthService {
   // ── REFRESCAR TOKEN ────────────────────────────────────────────────────────
   static Future<String?> _refreshToken(String refresh) async {
     try {
-      final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/token/refresh/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: jsonEncode({'refresh': refresh}),
-      ).timeout(const Duration(seconds: 8));
+      final res = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/token/refresh/'),
+            headers: {
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+            },
+            body: jsonEncode({'refresh': refresh}),
+          )
+          .timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
-        final data       = jsonDecode(res.body);
-        final newAccess  = data['access']  as String?;
+        final data = jsonDecode(res.body);
+        final newAccess = data['access'] as String?;
         final newRefresh = data['refresh'] as String?;
         if (newAccess != null) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString(_keyAccess, newAccess);
-          if (newRefresh != null) await prefs.setString(_keyRefresh, newRefresh);
+          if (newRefresh != null)
+            await prefs.setString(_keyRefresh, newRefresh);
           return newAccess;
         }
       }
@@ -155,7 +160,7 @@ class AuthService {
     final data = jsonDecode(response.body);
 
     if (response.statusCode == 200) {
-      final accessToken  = data['access']  ?? '';
+      final accessToken = data['access'] ?? '';
       final refreshToken = data['refresh'] as String?;
       await saveTokens(access: accessToken, refresh: refreshToken);
 
@@ -170,7 +175,7 @@ class AuthService {
           },
         );
         if (perfilRes.statusCode == 200) {
-          final perfil   = jsonDecode(perfilRes.body);
+          final perfil = jsonDecode(perfilRes.body);
           final username = perfil['username'] ?? perfil['user']?['username'];
           if (username != null && username.toString().isNotEmpty) {
             await saveUsername(username.toString());
@@ -188,7 +193,11 @@ class AuthService {
 
       return {'success': true, 'data': data, 'onboarding_done': onboardingDone};
     } else {
-      final mensaje = data['detail'] ?? data['message'] ?? data['error'] ?? 'Credenciales inválidas';
+      final mensaje =
+          data['detail'] ??
+          data['message'] ??
+          data['error'] ??
+          'Credenciales inválidas';
       return {'success': false, 'message': mensaje};
     }
   }
@@ -207,8 +216,8 @@ class AuthService {
         'ngrok-skip-browser-warning': 'true',
       },
       body: jsonEncode({
-        'email':     email,
-        'username':  username,
+        'email': email,
+        'username': username,
         'password1': password1,
         'password2': password2,
       }),
@@ -218,14 +227,20 @@ class AuthService {
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       if (data['access'] != null) {
-        await saveTokens(access: data['access'] ?? '', refresh: data['refresh']);
+        await saveTokens(
+          access: data['access'] ?? '',
+          refresh: data['refresh'],
+        );
       }
       await saveUsername(username);
       return {'success': true, 'data': data};
     } else {
       String mensaje = 'Error al registrarse';
       if (data is Map) {
-        final firstVal = data.values.firstWhere((v) => v != null, orElse: () => null);
+        final firstVal = data.values.firstWhere(
+          (v) => v != null,
+          orElse: () => null,
+        );
         if (firstVal is List && firstVal.isNotEmpty) {
           mensaje = firstVal.first.toString();
         } else if (firstVal is String) {
@@ -238,7 +253,7 @@ class AuthService {
 
   // ── OBTENER PERFIL ─────────────────────────────────────────────────────────
   static Future<Map<String, dynamic>> getPerfil() async {
-    final token    = await getToken();
+    final token = await getToken();
     final response = await http.get(
       Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
       headers: {
@@ -252,5 +267,29 @@ class AuthService {
       return {'success': true, 'data': jsonDecode(response.body)};
     }
     return {'success': false, 'message': 'No se pudo obtener el perfil'};
+  }
+
+  // ── REGISTRAR ACCESO DIARIO (racha y calendario) ───────────────────────────
+  /// Llama a /api/acceso/ con el token actual. Se hace fire-and-forget:
+  /// no bloquea el arranque si falla (sin red, token inválido, etc.).
+  static Future<void> registrarAcceso() async {
+    try {
+      final token = await getToken();
+      if (token == null) return;
+
+      await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/acceso/'),
+            headers: {
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 6));
+    } catch (_) {
+      // Si falla (sin red, 4xx, timeout) simplemente lo ignoramos.
+      // La racha se actualizará la próxima vez que haya conexión.
+    }
   }
 }
