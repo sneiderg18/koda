@@ -82,6 +82,14 @@ class Usuario(AbstractUser):
         ('alto', 'Alto'),
     ])
 
+    # ─── Racha de constancia ─────────────────────────────────
+    racha_actual = models.PositiveIntegerField(default=0,
+        help_text="Días consecutivos activos en la app")
+    racha_maxima = models.PositiveIntegerField(default=0,
+        help_text="Mejor racha histórica")
+    ultimo_acceso = models.DateField(null=True, blank=True,
+        help_text="Último día que el usuario abrió la app")
+
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
 
@@ -91,6 +99,37 @@ class Usuario(AbstractUser):
 
     def __str__(self):
         return self.email
+
+    def registrar_acceso_hoy(self):
+        """
+        Llama este método cada vez que el usuario abre la app.
+        Actualiza la racha y registra el acceso del día.
+        Retorna True si es la primera vez hoy, False si ya se registró.
+        """
+        from datetime import date, timedelta
+
+        hoy = date.today()
+
+        # Ya se registró hoy — no hacer nada
+        if self.ultimo_acceso == hoy:
+            return False
+
+        ayer = hoy - timedelta(days=1)
+
+        if self.ultimo_acceso == ayer:
+            # Día consecutivo — incrementar racha
+            self.racha_actual += 1
+        else:
+            # Se rompió la racha — reiniciar
+            self.racha_actual = 1
+
+        # Actualizar racha máxima si corresponde
+        if self.racha_actual > self.racha_maxima:
+            self.racha_maxima = self.racha_actual
+
+        self.ultimo_acceso = hoy
+        self.save(update_fields=['racha_actual', 'racha_maxima', 'ultimo_acceso'])
+        return True
 
 
 class PlanEntrenamiento(models.Model):
@@ -123,7 +162,6 @@ class PlanAlimentacion(models.Model):
     calorias = models.IntegerField()
     objetivo = models.CharField(max_length=500)
     activo = models.BooleanField(default=True)
-    # ─── Campos de seguimiento (igual que PlanEntrenamiento) ──
     completado = models.BooleanField(default=False)
     fecha_completado = models.DateTimeField(null=True, blank=True)
     duracion_dias = models.PositiveIntegerField(default=30, help_text="Duración del plan en días")
@@ -199,7 +237,6 @@ class RutinaEjercicio(models.Model):
         return f"{self.nombre} - Plan {self.plan.pk}"
 
 
-# ─── Igual que RutinaEjercicio pero para alimentación ────────
 class RutinaComida(models.Model):
     MOMENTO_CHOICES = [
         ('desayuno', 'Desayuno'),
@@ -220,7 +257,6 @@ class RutinaComida(models.Model):
     carbohidratos = models.FloatField(default=0)
     grasas = models.FloatField(default=0)
     descripcion = models.TextField(blank=True)
-    # ─── Campos de receta completa ────────────────────────────
     ingredientes = models.TextField(blank=True, help_text="Lista de ingredientes con cantidades")
     preparacion = models.TextField(blank=True, help_text="Pasos para preparar la comida")
     tiempo_preparacion = models.PositiveIntegerField(default=0, help_text="Tiempo en minutos")
@@ -327,3 +363,41 @@ class EjercicioSesion(models.Model):
 
     def __str__(self):
         return f"Sesión {self.sesion.pk} - {self.rutina_ejercicio.nombre}"
+
+
+# ─── Nuevo: registro diario de acceso a la app ────────────────
+class RegistroAcceso(models.Model):
+    """
+    Un registro por día por usuario — se crea automáticamente cuando
+    el usuario abre la app. Permite pintar el calendario de constancia
+    distinguiendo: abrió la app / entrenó / cumplió alimentación.
+    """
+    usuario = models.ForeignKey(
+        Usuario, on_delete=models.CASCADE, related_name='registros_acceso'
+    )
+    fecha = models.DateField()
+
+    # Estado del día — se actualiza conforme el usuario actúa
+    entreno = models.BooleanField(default=False,
+        help_text="Completó al menos una sesión de entrenamiento ese día")
+    cumplio_alimentacion = models.BooleanField(default=False,
+        help_text="Registró cumplimiento de alimentación ese día")
+    nivel_alimentacion = models.CharField(
+        max_length=20, blank=True,
+        choices=[
+            ('excelente', 'Excelente'),
+            ('bueno', 'Bueno'),
+            ('regular', 'Regular'),
+            ('malo', 'Malo'),
+        ],
+        help_text="Copia del nivel_cumplimiento de ProgresoAlimentacion para acceso rápido"
+    )
+
+    class Meta:
+        unique_together = ('usuario', 'fecha')
+        ordering = ['-fecha']
+        verbose_name = 'Registro de Acceso'
+        verbose_name_plural = 'Registros de Acceso'
+
+    def __str__(self):
+        return f"{self.usuario.email} - {self.fecha}"
