@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
 
 
 class Usuario(AbstractUser):
@@ -401,3 +402,77 @@ class RegistroAcceso(models.Model):
 
     def __str__(self):
         return f"{self.usuario.email} - {self.fecha}"
+
+
+# ─── Rate limiting: intentos de login ────────────────────────
+class IntentoLogin(models.Model):
+    """
+    Registra cada intento de login fallido por email e IP.
+    Tras MAX_INTENTOS fallas en VENTANA_MINUTOS, la cuenta/IP queda bloqueada
+    durante BLOQUEO_MINUTOS.
+    """
+    MAX_INTENTOS = 5
+    VENTANA_MINUTOS = 15   # ventana de tiempo para contar intentos
+    BLOQUEO_MINUTOS = 15   # duración del bloqueo
+
+    email = models.EmailField(db_index=True)
+    ip = models.GenericIPAddressField(db_index=True)
+    fecha = models.DateTimeField(auto_now_add=True)
+    exitoso = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-fecha']
+        verbose_name = 'Intento de Login'
+        verbose_name_plural = 'Intentos de Login'
+
+    def __str__(self):
+        estado = 'OK' if self.exitoso else 'FALLIDO'
+        return f"{self.email} - {self.ip} - {estado} - {self.fecha}"
+
+    @classmethod
+    def esta_bloqueado(cls, email, ip):
+        """
+        Retorna (bloqueado: bool, segundos_restantes: int).
+        Se bloquea si hay >= MAX_INTENTOS fallidos en los últimos VENTANA_MINUTOS
+        para ese email O esa IP.
+        """
+        desde = timezone.now() - timedelta(minutes=cls.VENTANA_MINUTOS)
+
+        intentos = cls.objects.filter(
+            fecha__gte=desde,
+            exitoso=False,
+        ).filter(
+            models.Q(email=email) | models.Q(ip=ip)
+        ).count()
+
+        if intentos >= cls.MAX_INTENTOS:
+            # Calcular cuánto tiempo falta para desbloqueo
+            primer_intento = cls.objects.filter(
+                fecha__gte=desde,
+                exitoso=False,
+            ).filter(
+                models.Q(email=email) | models.Q(ip=ip)
+            ).order_by('fecha').first()
+
+            if primer_intento:
+                desbloqueo = primer_intento.fecha + timedelta(minutes=cls.BLOQUEO_MINUTOS)
+                restantes = max(0, int((desbloqueo - timezone.now()).total_seconds()))
+                return True, restantes
+
+        return False, 0
+
+    @classmethod
+    def registrar_intento(cls, email, ip, exitoso=False):
+        """Crea un registro del intento."""
+        cls.objects.create(email=email, ip=ip, exitoso=exitoso)
+
+    @classmethod
+    def limpiar_intentos(cls, email, ip):
+        """Al login exitoso, elimina los intentos fallidos previos."""
+        desde = timezone.now() - timedelta(minutes=cls.VENTANA_MINUTOS)
+        cls.objects.filter(
+            fecha__gte=desde,
+            exitoso=False,
+        ).filter(
+            models.Q(email=email) | models.Q(ip=ip)
+        ).delete()
