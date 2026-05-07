@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import (
     Ejercicio, PlanEntrenamiento, PlanAlimentacion, Progreso,
     Comida, RutinaEjercicio, RutinaComida, RegistroActividad, ProgresoAlimentacion,
-    SesionEntrenamiento, EjercicioSesion, RegistroAcceso, IntentoLogin
+    SesionEntrenamiento, EjercicioSesion, RegistroAcceso
 )
 from .serializers import (
     RegistroSerializer, UsuarioSerializer, EjercicioSerializer,
@@ -38,108 +38,6 @@ class RegistroAPIView(APIView):
                 'usuario': UsuarioSerializer(usuario).data
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-def _get_client_ip(request):
-    """Obtiene la IP real del cliente."""
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        return x_forwarded_for.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', '0.0.0.0')
-
-
-class LoginAPIView(APIView):
-    """
-    POST /api/login/
-    Reemplaza TokenObtainPairView añadiendo rate limiting:
-    - Máximo 5 intentos fallidos (por email o IP) en 15 minutos
-    - Bloqueo de 15 minutos al superar el límite
-    - Al login exitoso se limpian los intentos previos
-    """
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        from django.contrib.auth import authenticate
-
-        email = request.data.get('email', '').lower().strip()
-        password = request.data.get('password', '')
-        ip = _get_client_ip(request)
-
-        if not email or not password:
-            return Response(
-                {'error': 'Email y contraseña son requeridos.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # ── Verificar bloqueo ──────────────────────────────────
-        bloqueado, segundos = IntentoLogin.esta_bloqueado(email, ip)
-        if bloqueado:
-            minutos = segundos // 60 + 1
-            return Response(
-                {
-                    'error': f'Demasiados intentos fallidos. Intenta de nuevo en {minutos} minuto(s).',
-                    'bloqueado': True,
-                    'segundos_restantes': segundos,
-                },
-                status=status.HTTP_429_TOO_MANY_REQUESTS
-            )
-
-        # ── Autenticar ─────────────────────────────────────────
-        usuario = authenticate(request, username=email, password=password)
-
-        if usuario is None:
-            # Registrar intento fallido
-            IntentoLogin.registrar_intento(email, ip, exitoso=False)
-
-            # Re-verificar si acaba de bloquearse con este intento
-            bloqueado, segundos = IntentoLogin.esta_bloqueado(email, ip)
-            if bloqueado:
-                minutos = segundos // 60 + 1
-                return Response(
-                    {
-                        'error': f'Cuenta bloqueada por demasiados intentos. Intenta en {minutos} minuto(s).',
-                        'bloqueado': True,
-                        'segundos_restantes': segundos,
-                    },
-                    status=status.HTTP_429_TOO_MANY_REQUESTS
-                )
-
-            # Calcular intentos restantes para informar al cliente
-            from django.utils import timezone as tz
-            from datetime import timedelta as td
-            from django.db.models import Q
-            desde = tz.now() - td(minutes=IntentoLogin.VENTANA_MINUTOS)
-            intentos_actuales = IntentoLogin.objects.filter(
-                fecha__gte=desde,
-                exitoso=False,
-            ).filter(Q(email=email) | Q(ip=ip)).count()
-            restantes = max(0, IntentoLogin.MAX_INTENTOS - intentos_actuales)
-
-            return Response(
-                {
-                    'error': 'Credenciales incorrectas.',
-                    'bloqueado': False,
-                    'intentos_restantes': restantes,
-                },
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-
-        # ── Login exitoso ──────────────────────────────────────
-        if not usuario.is_active:
-            return Response(
-                {'error': 'Esta cuenta está desactivada.'},
-                status=status.HTTP_403_FORBIDDEN
-            )
-
-        IntentoLogin.limpiar_intentos(email, ip)
-        IntentoLogin.registrar_intento(email, ip, exitoso=True)
-
-        refresh = RefreshToken.for_user(usuario)
-        return Response({
-            'access': str(refresh.access_token),
-            'refresh': str(refresh),
-            'usuario': UsuarioSerializer(usuario).data
-        }, status=status.HTTP_200_OK)
 
 
 # ─── Perfil ───────────────────────────────────────────────────

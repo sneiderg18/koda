@@ -1,12 +1,12 @@
 from django.urls import path
-from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from . import api_views
 from . import ia_views
 
 urlpatterns = [
     # ─── Autenticación ───────────────────────────────────────
     path('registro/', api_views.RegistroAPIView.as_view(), name='api_registro'),
-    path('login/', api_views.LoginAPIView.as_view(), name='api_login'),          # ← con rate limiting
+    path('login/', TokenObtainPairView.as_view(), name='api_login'),
     path('token/refresh/', TokenRefreshView.as_view(), name='api_token_refresh'),
 
     # ─── Perfil y onboarding ─────────────────────────────────
@@ -58,8 +58,16 @@ urlpatterns = [
     path('sesion/activa/', api_views.SesionActivaAPIView.as_view(), name='api_sesion_activa'),
     path('sesion/<int:sesion_id>/ejercicio/<int:ejercicio_sesion_id>/completar/', api_views.CompletarEjercicioAPIView.as_view(), name='api_completar_ejercicio'),
 
-    # ─── Acceso y progreso ────────────────────────────────────
+    # ─── NUEVO: Acceso y progreso ─────────────────────────────
+    # Llamar al abrir la app — registra acceso, actualiza racha, devuelve estado del día
     path('acceso/', api_views.RegistrarAccesoAPIView.as_view(), name='api_acceso'),
+
+    # Dashboard de progreso completo (sin IA)
+    # Con análisis IA: GET /api/progreso/resumen/?ia=true
     path('progreso/resumen/', api_views.ResumenProgresoAPIView.as_view(), name='api_progreso_resumen'),
+
+    # Calendario mensual de constancia
+    # GET /api/progreso/calendario/           → mes actual
+    # GET /api/progreso/calendario/?año=2025&mes=3  → mes específico
     path('progreso/calendario/', api_views.CalendarioProgresoAPIView.as_view(), name='api_progreso_calendario'),
 ]
