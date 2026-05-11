@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -6,11 +7,14 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../services/auth_service.dart';
 
-const _kGreen   = Color(0xFF43C6AC);
-const _kBgLight = Color(0xFFF5F7FA);
-const _kDark    = Color(0xFF1A1A2E);
-const _kRed     = Color(0xFFD72105);
-const _kGold    = Color(0xFFFFB800);
+// ── Paleta ─────────────────────────────────────────────────────────────────────
+const _kRed    = Color(0xFFF25050);   // secundario (botón home, acentos)
+const _kBg     = Color(0xFF000000);   // primario
+const _kCard   = Color(0xFF0D0D0D);   // terciario
+const _kCard2  = Color(0xFF1A1A1A);   // cards internas
+const _kGreen  = Color(0xFF43C6AC);   // iconos / acciones (no modificar)
+const _kGold   = Color(0xFFFFB800);
+const _kDark   = Color(0xFF1A1A2E);
 
 class FoodPlanScreen extends StatefulWidget {
   const FoodPlanScreen({super.key});
@@ -19,8 +23,8 @@ class FoodPlanScreen extends StatefulWidget {
 }
 
 class _FoodPlanScreenState extends State<FoodPlanScreen> {
-  bool  _loading   = true;
-  bool  _generando = false;
+  bool  _loading    = true;
+  bool  _generando  = false;
   bool  _registrando = false;
   String? _error;
 
@@ -31,7 +35,7 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
   int    _duracionDias    = 0;
   int    _diasRestantes   = 0;
   double _pctCompletado   = 0;
-  bool   _yaRegistroHoy  = false;
+  bool   _yaRegistroHoy   = false;
 
   @override
   void initState() {
@@ -123,11 +127,11 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
     }
   }
 
-  // ── Registrar cumplimiento del día ─────────────────────────────────────────
+  // ── Registrar cumplimiento ─────────────────────────────────────────────────
   Future<void> _mostrarDialogoRegistro() async {
     String? nivelSeleccionado;
-    final calCtrl  = TextEditingController();
-    final aguaCtrl = TextEditingController();
+    final calCtrl   = TextEditingController();
+    final aguaCtrl  = TextEditingController();
     final notasCtrl = TextEditingController();
 
     final confirmar = await showDialog<bool>(
@@ -159,8 +163,6 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                         color: _kDark)),
                 const SizedBox(height: 10),
-
-                // Botones de nivel
                 ...['excelente', 'bueno', 'regular', 'malo'].map((nivel) {
                   final config = _nivelConfig(nivel);
                   final seleccionado = nivelSeleccionado == nivel;
@@ -200,14 +202,11 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                     ),
                   );
                 }),
-
                 const SizedBox(height: 16),
                 const Text('Datos opcionales',
                     style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                         color: _kDark)),
                 const SizedBox(height: 10),
-
-                // Calorías consumidas
                 TextField(
                   controller: calCtrl,
                   keyboardType: TextInputType.number,
@@ -219,8 +218,6 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-
-                // Agua consumida
                 TextField(
                   controller: aguaCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -234,8 +231,6 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-
-                // Notas
                 TextField(
                   controller: notasCtrl,
                   maxLines: 2,
@@ -274,7 +269,6 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
 
     if (confirmar != true || nivelSeleccionado == null) return;
 
-    // ── Hacer el POST ──────────────────────────────────────────────────────
     setState(() => _registrando = true);
     try {
       final h   = await _headers;
@@ -316,8 +310,6 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           margin: const EdgeInsets.all(16),
         ));
-
-        // Recargar para reflejar el progreso actualizado
         await _loadPlan();
       } else {
         final data = jsonDecode(res.body);
@@ -372,19 +364,16 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
         return _NivelConfig('🌟', 'Excelente', 'Seguí todo al pie de la letra',
             const Color(0xFF2E7D32));
       case 'bueno':
-        return _NivelConfig('✅', 'Bueno', 'Seguí la mayoría del plan',
-            const Color(0xFF43C6AC));
+        return _NivelConfig('✅', 'Bueno', 'Seguí la mayoría del plan', _kGreen);
       case 'regular':
         return _NivelConfig('😐', 'Regular', 'Cumplí parcialmente',
             const Color(0xFFFF9800));
       case 'malo':
       default:
-        return _NivelConfig('😕', 'Malo', 'No pude seguir el plan hoy',
-            const Color(0xFFD72105));
+        return _NivelConfig('😕', 'Malo', 'No pude seguir el plan hoy', _kRed);
     }
   }
 
-  // ── Configuración por momento del día ─────────────────────────────────────
   _MomentoConfig _momentoConfig(String momento) {
     switch (momento.toLowerCase()) {
       case 'desayuno':
@@ -413,43 +402,411 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
     return {'cal': cal, 'prot': prot, 'carbs': carbs, 'grasas': grasas};
   }
 
+  // ── BUILD ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _kBgLight,
-      appBar: _buildAppBar(),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _kGreen))
-          : _error != null
-              ? _buildError()
-              : RefreshIndicator(
-                  color: _kGreen,
-                  onRefresh: _loadPlan,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-                    children: [
-                      _buildHeaderCard(),
-                      const SizedBox(height: 16),
-                      _buildProgressCard(),
-                      const SizedBox(height: 16),
-
-                      // ── BOTÓN REGISTRAR CUMPLIMIENTO ──────────────────
-                      if (!_yaRegistroHoy) _buildBotonRegistrar(),
-                      if (_yaRegistroHoy)  _buildYaRegistrado(),
-                      const SizedBox(height: 20),
-
-                      _buildMacroSummary(),
-                      const SizedBox(height: 20),
-                      _buildSectionTitle(),
-                      const SizedBox(height: 12),
-                      ..._comidas.map((c) => _buildMealCard(c)),
-                    ],
-                  ),
-                ),
+      backgroundColor: const Color(0xFFF5F7FA),   // fondo blanco páginas funcionales
+      body: Column(
+        children: [
+          _buildBanner(),
+          _buildHomeStrip(),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator(color: _kGreen))
+                : _error != null
+                    ? _buildError()
+                    : RefreshIndicator(
+                        color: _kGreen,
+                        onRefresh: _loadPlan,
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                          children: [
+                            _buildGaugeCard(),
+                            const SizedBox(height: 16),
+                            _buildMacrosBars(),
+                            const SizedBox(height: 16),
+                            if (!_yaRegistroHoy) _buildBotonRegistrar(),
+                            if (_yaRegistroHoy)  _buildYaRegistrado(),
+                            const SizedBox(height: 20),
+                            _buildSectionTitle(),
+                            const SizedBox(height: 12),
+                            ..._comidas.map((c) => _buildMealCard(c)),
+                          ],
+                        ),
+                      ),
+          ),
+        ],
+      ),
     );
   }
 
-  // ── Botón registrar ────────────────────────────────────────────────────────
+  // ── Banner superior (fijo, no scrollea) ──────────────────────────────────
+  Widget _buildBanner() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFF25050), Color(0xFFB83030)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                icon: const Icon(Icons.refresh_rounded,
+                    color: Colors.white70, size: 20),
+                onPressed: _loadPlan,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 18),
+              child: Text(
+                'MI ALIMENTACIÓN',
+                style: GoogleFonts.bebasNeue(
+                  color: Colors.white,
+                  fontSize: 26,
+                  letterSpacing: 3,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Tira del botón HOME (fija, fuera del scroll) ───────────────────────────
+  Widget _buildHomeStrip() {
+    return Container(
+      color: const Color(0xFFF5F7FA),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: SizedBox(
+          width: MediaQuery.of(context).size.width * 0.80,
+          child: _buildHomeButton(),
+        ),
+      ),
+    );
+  }
+
+  // ── Botón HOME (idéntico al de training_plan) ──────────────────────────────
+  Widget _buildHomeButton() {
+    return GestureDetector(
+      onTap: () => Navigator.pop(context),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: _kRed,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: _kRed.withOpacity(0.4),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.arrow_back_ios_new_rounded,
+                color: Colors.white, size: 14),
+            const SizedBox(width: 6),
+            Text(
+              'HOME',
+              style: GoogleFonts.bebasNeue(
+                color: Colors.white,
+                fontSize: 15,
+                letterSpacing: 1.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Gauge de calorías (estilo manómetro) ───────────────────────────────────
+  Widget _buildGaugeCard() {
+    final calTotal      = (_plan?['calorias'] ?? 2350) as num;
+    final calConsumidas = _totales['cal']!;
+    final pct           = (calConsumidas / calTotal).clamp(0.0, 1.0);
+    final objetivo      = _plan?['objetivo'] ?? 'Plan alimenticio';
+
+    // Contenedor transparente — sin color ni borde para integración limpia
+    return Container(
+      color: Colors.transparent,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Fila: nombre del plan + badge registrado ─────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  objetivo.toString(),
+                  style: const TextStyle(
+                    color: _kDark,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (_yaRegistroHoy)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: _kGreen.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _kGreen.withOpacity(0.4)),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.check_circle_rounded, color: _kGreen, size: 12),
+                    const SizedBox(width: 4),
+                    const Text('Registrado',
+                        style: TextStyle(color: _kGreen, fontSize: 11,
+                            fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // ── Manómetro con LayoutBuilder para radio dinámico ──────────────
+          LayoutBuilder(
+            builder: (context, constraints) {
+              const strokeW = 16.0;
+              final availW  = constraints.maxWidth;
+              // Radio = 33% del ancho disponible → gauge más compacto
+              final radius  = availW * 0.33;
+              // Alto del canvas = radio + la mitad del trazo (semicírculo exacto)
+              final gaugeH  = radius + strokeW / 2 + 4;
+              // Alto total = gauge + espacio para número + label
+              const textH   = 60.0;
+
+              return SizedBox(
+                height: gaugeH + textH,
+                child: Stack(
+                  children: [
+                    // Canvas del arco — ocupa solo la zona del semicírculo
+                    Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      height: gaugeH,
+                      child: CustomPaint(
+                        painter: _GaugePainter(pct, radius: radius, strokeWidth: strokeW),
+                      ),
+                    ),
+                    // Texto anclado al centro geométrico del arco (base del semicírculo)
+                    // cy del painter = gaugeH - strokeW/2 - 4 ≈ radius
+                    // El texto va justo debajo de ese punto
+                    Positioned(
+                      top: gaugeH - 4,
+                      left: 0,
+                      right: 0,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          RichText(
+                            textAlign: TextAlign.center,
+                            text: TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: calConsumidas.toInt().toString(),
+                                  style: GoogleFonts.bebasNeue(
+                                    color: _kDark,
+                                    fontSize: 38,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: ' kcal/${calTotal.toInt()}',
+                                  style: GoogleFonts.bebasNeue(
+                                    color: Colors.grey,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            _calLabel(pct),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: _kRed,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+
+          const SizedBox(height: 16),
+
+          // ── Stats días ────────────────────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _dayStat('$_diasCompletados', 'Días completados', _kGreen),
+              Container(width: 1, height: 32, color: Colors.black12),
+              _dayStat('$_diasRestantes', 'Días restantes', Colors.black45),
+              Container(width: 1, height: 32, color: Colors.black12),
+              _dayStat('$_duracionDias', 'Total días', Colors.black26),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _calLabel(double pct) {
+    if (pct < 0.3) return 'Bajo';
+    if (pct < 0.75) return 'En progreso';
+    if (pct < 1.0) return 'Casi completo';
+    return 'Meta alcanzada';
+  }
+
+  Color _gaugeColor(double pct) {
+    if (pct < 0.5) return _kRed;
+    if (pct < 0.85) return _kGold;
+    return _kGreen;
+  }
+
+  Widget _dayStat(String value, String label, Color color) {
+    return Column(children: [
+      Text(value,
+          style: GoogleFonts.bebasNeue(
+              color: color, fontSize: 22, letterSpacing: 1)),
+      const SizedBox(height: 2),
+      Text(label,
+          style: const TextStyle(color: Colors.black45, fontSize: 10)),
+    ]);
+  }
+
+  // ── Barras verticales de macros ────────────────────────────────────────────
+  Widget _buildMacrosBars() {
+    final t        = _totales;
+    final calTotal = (_plan?['calorias'] ?? 2350) as num;
+
+    final metaProt  = (calTotal * 0.30 / 4).clamp(50.0, 300.0);
+    final metaCarbs = (calTotal * 0.45 / 4).clamp(50.0, 500.0);
+    final metaGrasa = (calTotal * 0.25 / 9).clamp(20.0, 200.0);
+
+    // Contenedor transparente — sin fondo para integrarse al fondo blanco
+    return Container(
+      color: Colors.transparent,
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _verticalMacroBar(
+            label: 'Proteínas',
+            value: t['prot']!,
+            meta: metaProt,
+            unit: 'g',
+            color: const Color(0xFF4F6EF7),
+            icon: Icons.egg_rounded,
+          ),
+          _verticalMacroBar(
+            label: 'Carbohidratos',
+            value: t['carbs']!,
+            meta: metaCarbs,
+            unit: 'g',
+            color: const Color(0xFFFF9800),
+            icon: Icons.grain_rounded,
+          ),
+          _verticalMacroBar(
+            label: 'Grasas',
+            value: t['grasas']!,
+            meta: metaGrasa,
+            unit: 'g',
+            color: _kGreen,
+            icon: Icons.opacity_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _verticalMacroBar({
+    required String label,
+    required double value,
+    required double meta,
+    required String unit,
+    required Color color,
+    required IconData icon,
+  }) {
+    final pct = (value / meta).clamp(0.0, 1.0);
+    const barH = 100.0;
+
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(height: 8),
+        // Barra vertical
+        Container(
+          width: 28,
+          height: barH,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          alignment: Alignment.bottomCenter,
+          clipBehavior: Clip.hardEdge,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeOut,
+            width: 28,
+            height: barH * pct,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${value.toStringAsFixed(0)}$unit',
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '/${meta.toStringAsFixed(0)}$unit',
+          style: const TextStyle(color: Colors.black38, fontSize: 10),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.black54, fontSize: 10),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  // ── Botón registrar cumplimiento ───────────────────────────────────────────
   Widget _buildBotonRegistrar() {
     return SizedBox(
       width: double.infinity,
@@ -477,7 +834,6 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
     );
   }
 
-  // ── Badge "ya registrado hoy" ──────────────────────────────────────────────
   Widget _buildYaRegistrado() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -486,7 +842,7 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _kGreen.withOpacity(0.3)),
       ),
-      child: const Row(children: [
+      child: Row(children: const [
         Icon(Icons.check_circle_rounded, color: _kGreen, size: 22),
         SizedBox(width: 10),
         Expanded(
@@ -496,210 +852,14 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                     fontSize: 14, color: _kGreen)),
             SizedBox(height: 2),
             Text('Vuelve mañana para registrar el siguiente día.',
-                style: TextStyle(fontSize: 12, color: Colors.grey)),
+                style: TextStyle(fontSize: 12, color: Color(0xFF9E9E9E))),
           ]),
         ),
       ]),
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      elevation: 0,
-      centerTitle: true,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _kDark),
-        onPressed: () => Navigator.pop(context),
-      ),
-      title: Text('Plan Alimenticio',
-          style: GoogleFonts.bebasNeue(
-              fontSize: 22, color: _kDark, letterSpacing: 1.5)),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.refresh_rounded, color: _kGreen),
-          onPressed: _loadPlan,
-        ),
-      ],
-      bottom: PreferredSize(
-        preferredSize: const Size.fromHeight(1),
-        child: Container(color: const Color(0xFFEEEEEE), height: 1),
-      ),
-    );
-  }
-
-  Widget _buildHeaderCard() {
-    final objetivo = _plan?['objetivo'] ?? 'Plan alimenticio';
-    final calTotal = _plan?['calorias'] ?? 0;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-            colors: [Color(0xFF43C6AC), Color(0xFF2EA890)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(
-            color: _kGreen.withOpacity(0.3), blurRadius: 12,
-            offset: const Offset(0, 4))],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Icon(Icons.restaurant_rounded, color: Colors.white70, size: 16),
-          const SizedBox(width: 8),
-          const Text('PLAN ACTIVO',
-              style: TextStyle(color: Colors.white70, fontSize: 11,
-                  fontWeight: FontWeight.w600, letterSpacing: 1.5)),
-          const Spacer(),
-          if (_yaRegistroHoy)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.25),
-                  borderRadius: BorderRadius.circular(20)),
-              child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.check_circle_rounded, color: Colors.white, size: 13),
-                SizedBox(width: 4),
-                Text('Registrado hoy',
-                    style: TextStyle(color: Colors.white, fontSize: 11,
-                        fontWeight: FontWeight.w600)),
-              ]),
-            ),
-        ]),
-        const SizedBox(height: 10),
-        Text(objetivo.toString(),
-            style: const TextStyle(color: Colors.white, fontSize: 16,
-                fontWeight: FontWeight.bold, height: 1.3)),
-        const SizedBox(height: 14),
-        Wrap(spacing: 10, runSpacing: 8, children: [
-          _chip(Icons.local_fire_department_rounded, '$calTotal kcal/día'),
-          _chip(Icons.calendar_today_rounded, '$_duracionDias días'),
-          _chip(Icons.restaurant_menu_rounded, '${_comidas.length} comidas'),
-        ]),
-      ]),
-    );
-  }
-
-  Widget _chip(IconData icon, String label) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-    decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(30)),
-    child: Row(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, color: Colors.white, size: 13),
-      const SizedBox(width: 5),
-      Text(label,
-          style: const TextStyle(color: Colors.white, fontSize: 12,
-              fontWeight: FontWeight.w500)),
-    ]),
-  );
-
-  Widget _buildProgressCard() {
-    final pct = (_pctCompletado / 100).clamp(0.0, 1.0);
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(0.05), blurRadius: 10,
-            offset: const Offset(0, 3))],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Row(children: [
-              Icon(Icons.bolt_rounded, color: _kGold, size: 20),
-              SizedBox(width: 6),
-              Text('Progreso del plan',
-                  style: TextStyle(fontWeight: FontWeight.bold,
-                      fontSize: 14, color: _kDark)),
-            ]),
-            Text('${_pctCompletado.toStringAsFixed(0)}%',
-                style: const TextStyle(fontWeight: FontWeight.bold,
-                    fontSize: 14, color: _kGreen)),
-          ],
-        ),
-        const SizedBox(height: 12),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: LinearProgressIndicator(
-            value: pct,
-            minHeight: 14,
-            backgroundColor: Colors.grey[200],
-            valueColor: AlwaysStoppedAnimation(pct >= 1.0 ? _kGold : _kGreen),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            _progressStat(Icons.check_circle_outline_rounded,
-                '$_diasCompletados días completados', _kGreen),
-            _progressStat(Icons.hourglass_bottom_rounded,
-                '$_diasRestantes días restantes', Colors.grey),
-          ],
-        ),
-      ]),
-    );
-  }
-
-  Widget _progressStat(IconData icon, String label, Color color) {
-    return Row(children: [
-      Icon(icon, color: color, size: 15),
-      const SizedBox(width: 5),
-      Text(label,
-          style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w500)),
-    ]);
-  }
-
-  Widget _buildMacroSummary() {
-    final t = _totales;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(0.04), blurRadius: 8,
-            offset: const Offset(0, 2))],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _macroStat('Calorías', '${t['cal']!.toInt()} kcal',
-              Icons.local_fire_department_rounded, const Color(0xFFFF6B6B)),
-          _divider(),
-          _macroStat('Proteínas', '${t['prot']!.toStringAsFixed(1)}g',
-              Icons.egg_rounded, const Color(0xFF4F6EF7)),
-          _divider(),
-          _macroStat('Carbos', '${t['carbs']!.toStringAsFixed(1)}g',
-              Icons.grain_rounded, const Color(0xFFFF9800)),
-          _divider(),
-          _macroStat('Grasas', '${t['grasas']!.toStringAsFixed(1)}g',
-              Icons.opacity_rounded, _kGreen),
-        ],
-      ),
-    );
-  }
-
-  Widget _macroStat(String label, String value, IconData icon, Color color) {
-    return Column(children: [
-      Icon(icon, color: color, size: 18),
-      const SizedBox(height: 4),
-      Text(value,
-          style: const TextStyle(fontWeight: FontWeight.bold,
-              fontSize: 12, color: _kDark)),
-      const SizedBox(height: 2),
-      Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-    ]);
-  }
-
-  Widget _divider() => Container(width: 1, height: 36, color: Colors.grey[200]);
-
+  // ── Sección comidas ────────────────────────────────────────────────────────
   Widget _buildSectionTitle() {
     return Row(children: [
       const Icon(Icons.restaurant_menu_rounded, color: _kGreen, size: 20),
@@ -747,9 +907,13 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [BoxShadow(
-              color: Colors.black.withOpacity(0.05), blurRadius: 10,
-              offset: const Offset(0, 3))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -774,7 +938,7 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                       style: TextStyle(fontSize: 10, color: cfg.color,
                           fontWeight: FontWeight.w700, letterSpacing: 1.2)),
                   Text('Comida $orden',
-                      style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                      style: const TextStyle(fontSize: 11, color: Colors.black38)),
                 ]),
                 const Spacer(),
                 Container(
@@ -792,8 +956,8 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                   ]),
                 ),
                 const SizedBox(width: 8),
-                Icon(Icons.keyboard_arrow_right_rounded,
-                    color: Colors.grey[400], size: 18),
+                const Icon(Icons.keyboard_arrow_right_rounded,
+                    color: Colors.black26, size: 18),
               ]),
             ),
             Padding(
@@ -807,14 +971,15 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                   if (descripcion.toString().isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text(descripcion.toString(),
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600],
+                        style: const TextStyle(fontSize: 12, color: Colors.black45,
                             height: 1.4)),
                   ],
                   const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                        color: _kBgLight, borderRadius: BorderRadius.circular(12)),
+                        color: const Color(0xFFF5F7FA),
+                        borderRadius: BorderRadius.circular(12)),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
@@ -830,10 +995,10 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                   ),
                   const SizedBox(height: 8),
                   Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                    Icon(Icons.touch_app_rounded, size: 12, color: Colors.grey[400]),
+                    Icon(Icons.touch_app_rounded, size: 12, color: Colors.black26),
                     const SizedBox(width: 4),
-                    Text('Toca para ver la receta',
-                        style: TextStyle(fontSize: 11, color: Colors.grey[400])),
+                    const Text('Toca para ver la receta',
+                        style: TextStyle(fontSize: 11, color: Colors.black26)),
                   ]),
                 ],
               ),
@@ -855,7 +1020,7 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
     ]);
   }
 
-  Widget _vDivider() => Container(width: 1, height: 28, color: Colors.grey[200]);
+  Widget _vDivider() => Container(width: 1, height: 28, color: Colors.black12);
 
   Widget _buildError() {
     final isNoPlan = _error?.contains('plan') == true;
@@ -919,6 +1084,94 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
   }
 }
 
+// ── CustomPainter: Manómetro / Gauge ──────────────────────────────────────────
+class _GaugePainter extends CustomPainter {
+  final double progress;      // 0.0 → 1.0
+  final double radius;        // radio pasado desde LayoutBuilder
+  final double strokeWidth;
+
+  const _GaugePainter(this.progress, {required this.radius, required this.strokeWidth});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // El centro del semicírculo queda en la mitad inferior del canvas
+    final cx = size.width / 2;
+    final cy = size.height - strokeWidth / 2 - 4;
+
+    // ── Arco de fondo ──────────────────────────────────────────────────────
+    final bgPaint = Paint()
+      ..color = const Color(0xFFE0E0E0)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(
+      Rect.fromCircle(center: Offset(cx, cy), radius: radius),
+      math.pi,      // empieza en izquierda
+      math.pi,      // 180°
+      false,
+      bgPaint,
+    );
+
+    // ── Arco de progreso ───────────────────────────────────────────────────
+    if (progress > 0.01) {
+      const fgColor = Color(0xFFF25050);  // siempre rojo
+      final fgPaint = Paint()
+        ..color = fgColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.round;
+
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset(cx, cy), radius: radius),
+        math.pi,
+        math.pi * progress,
+        false,
+        fgPaint,
+      );
+
+      // Punto en el extremo del progreso
+      final angle = math.pi + math.pi * progress;
+      final dotX  = cx + radius * math.cos(angle);
+      final dotY  = cy + radius * math.sin(angle);
+
+      canvas.drawCircle(Offset(dotX, dotY), strokeWidth * 0.45,
+          Paint()..color = const Color(0xFFF25050));
+      canvas.drawCircle(Offset(dotX, dotY), strokeWidth * 0.22,
+          Paint()..color = Colors.white);
+    }
+
+    // ── Marcas de escala ───────────────────────────────────────────────────
+    final tickPaint = Paint()
+      ..color = Colors.black12
+      ..strokeWidth = 1.5;
+
+    for (int i = 0; i <= 10; i++) {
+      final angle    = math.pi + (math.pi / 10) * i;
+      final isMajor  = i % 5 == 0;
+      final innerR   = radius - (isMajor ? strokeWidth + 6 : strokeWidth + 2);
+      final outerR   = radius - strokeWidth / 2 + 4;
+
+      canvas.drawLine(
+        Offset(cx + innerR * math.cos(angle), cy + innerR * math.sin(angle)),
+        Offset(cx + outerR * math.cos(angle), cy + outerR * math.sin(angle)),
+        tickPaint,
+      );
+    }
+  }
+
+  Color _gaugeColor(double p) {
+    if (p < 0.5) return const Color(0xFFF25050);
+    if (p < 0.85) return const Color(0xFFFFB800);
+    return const Color(0xFF43C6AC);
+  }
+
+  @override
+  bool shouldRepaint(_GaugePainter old) =>
+      old.progress != progress || old.radius != radius;
+}
+
+
 // ── Modelos helper ─────────────────────────────────────────────────────────────
 class _MomentoConfig {
   final String label;
@@ -936,7 +1189,7 @@ class _NivelConfig {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Bottom sheet: detalle completo de la comida
+// Bottom sheet: detalle completo de la comida (sin cambios de funcionalidad)
 // ══════════════════════════════════════════════════════════════════════════════
 class _DetalleComidaSheet extends StatelessWidget {
   final dynamic comida;
@@ -973,7 +1226,6 @@ class _DetalleComidaSheet extends StatelessWidget {
           controller: controller,
           padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
           children: [
-            // Handle
             Center(
               child: Container(
                 width: 40, height: 4,
@@ -984,8 +1236,6 @@ class _DetalleComidaSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Cabecera
             Row(children: [
               Container(
                 width: 44, height: 44,
@@ -1021,8 +1271,6 @@ class _DetalleComidaSheet extends StatelessWidget {
                 ),
             ]),
             const SizedBox(height: 16),
-
-            // Macros
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               decoration: BoxDecoration(
@@ -1045,8 +1293,6 @@ class _DetalleComidaSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-
-            // Descripción
             if (descripcion.isNotEmpty) ...[
               _seccionTitulo('Descripción', Icons.info_outline_rounded,
                   const Color(0xFF4F6EF7)),
@@ -1055,8 +1301,6 @@ class _DetalleComidaSheet extends StatelessWidget {
                   style: TextStyle(fontSize: 14, color: Colors.grey[700], height: 1.5)),
               const SizedBox(height: 20),
             ],
-
-            // Ingredientes
             if (ingredientes.isNotEmpty) ...[
               _seccionTitulo('Ingredientes', Icons.shopping_basket_rounded,
                   const Color(0xFFFF9800)),
@@ -1097,8 +1341,6 @@ class _DetalleComidaSheet extends StatelessWidget {
               ),
               const SizedBox(height: 20),
             ],
-
-            // Preparación
             if (preparacion.isNotEmpty) ...[
               _seccionTitulo('Preparación', Icons.restaurant_rounded, _kGreen),
               const SizedBox(height: 8),
@@ -1151,8 +1393,6 @@ class _DetalleComidaSheet extends StatelessWidget {
               ),
               const SizedBox(height: 24),
             ],
-
-            // Botón cerrar
             SizedBox(
               width: double.infinity,
               child: TextButton(
