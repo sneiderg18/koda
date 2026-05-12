@@ -546,44 +546,33 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Fila: nombre del plan + badge registrado ─────────────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  objetivo.toString(),
-                  style: const TextStyle(
-                    color: _kDark,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+          // ── Badge registrado ──────────────────────────────────────────────
+          if (_yaRegistroHoy)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _kGreen.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _kGreen.withOpacity(0.4)),
                 ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.check_circle_rounded, color: _kGreen, size: 12),
+                  const SizedBox(width: 4),
+                  const Text('Registrado',
+                      style: TextStyle(color: _kGreen, fontSize: 11,
+                          fontWeight: FontWeight.w600)),
+                ]),
               ),
-              if (_yaRegistroHoy)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _kGreen.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: _kGreen.withOpacity(0.4)),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.check_circle_rounded, color: _kGreen, size: 12),
-                    const SizedBox(width: 4),
-                    const Text('Registrado',
-                        style: TextStyle(color: _kGreen, fontSize: 11,
-                            fontWeight: FontWeight.w600)),
-                  ]),
-                ),
-            ],
-          ),
+            ),
           const SizedBox(height: 12),
 
           // ── Manómetro con LayoutBuilder para radio dinámico ──────────────
-          LayoutBuilder(
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: LayoutBuilder(
             builder: (context, constraints) {
               const strokeW = 16.0;
               final availW  = constraints.maxWidth;
@@ -593,6 +582,15 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
               final gaugeH  = radius + strokeW / 2 + 4;
               // Alto total = gauge + espacio para número + label
               const textH   = 60.0;
+
+              // ── Tamaños de fuente 100% proporcionales al radio ────────────
+              // Radio de referencia ≈ 118 px (360 px × 0.33) → fuentes originales
+              // fontSize principal = 50  → ratio ≈ 0.424
+              // fontSize subtexto  = 10  → ratio ≈ 0.085
+              // fontSize label     = 12  → ratio ≈ 0.102
+              final mainFontSize  = radius * 0.424;
+              final subFontSize   = radius * 0.085;
+              final labelFontSize = radius * 0.102;
 
               return SizedBox(
                 height: gaugeH + textH,
@@ -609,10 +607,8 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                       ),
                     ),
                     // Texto anclado al centro geométrico del arco (base del semicírculo)
-                    // cy del painter = gaugeH - strokeW/2 - 4 ≈ radius
-                    // El texto va justo debajo de ese punto
                     Positioned(
-                      top: gaugeH - 4,
+                      top: gaugeH - 70,
                       left: 0,
                       right: 0,
                       child: Column(
@@ -627,7 +623,7 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                                   text: calConsumidas.toInt().toString(),
                                   style: GoogleFonts.bebasNeue(
                                     color: _kDark,
-                                    fontSize: 38,
+                                    fontSize: mainFontSize,   // ← responsive
                                     letterSpacing: 1,
                                   ),
                                 ),
@@ -635,7 +631,7 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                                   text: ' kcal/${calTotal.toInt()}',
                                   style: GoogleFonts.bebasNeue(
                                     color: Colors.grey,
-                                    fontSize: 14,
+                                    fontSize: subFontSize,    // ← responsive
                                   ),
                                 ),
                               ],
@@ -644,9 +640,9 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                           Text(
                             _calLabel(pct),
                             textAlign: TextAlign.center,
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: _kRed,
-                              fontSize: 12,
+                              fontSize: labelFontSize,        // ← responsive
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -657,6 +653,8 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
                 ),
               );
             },
+          ),
+            ),
           ),
 
           const SizedBox(height: 16),
