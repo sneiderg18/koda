@@ -4,6 +4,9 @@ from django.contrib.auth.models import AbstractUser
 
 class Usuario(AbstractUser):
     # ─── Campos existentes ────────────────────────────────────
+    # El username es solo nombre para mostrar, puede repetirse.
+    # El identificador único real es el email.
+    username = models.CharField(max_length=150)
     edad = models.PositiveIntegerField(null=True, blank=True)
     peso = models.FloatField(null=True, blank=True, help_text="Peso en kg")
     altura = models.FloatField(null=True, blank=True, help_text="Altura en cm")

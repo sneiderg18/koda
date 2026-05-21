@@ -759,6 +759,27 @@ class IniciarSesionAPIView(APIView):
                 'es_sesion_nueva': False,
             }, status=status.HTTP_200_OK)
 
+        # ── Verificar si ya completó una sesión HOY ────────────
+        # Evita que el usuario haga dos sesiones el mismo día
+        sesion_hoy = SesionEntrenamiento.objects.filter(
+            usuario=request.user,
+            plan=plan,
+            completada=True,
+            fecha_inicio__date=date.today()
+        ).exists()
+
+        if sesion_hoy:
+            dias_semana = request.user.dias_entrenamiento or 3
+            sesiones_totales = plan.duracion * dias_semana
+            return Response({
+                'mensaje': 'Ya completaste tu sesión de hoy. ¡Excelente trabajo! Vuelve mañana para continuar.',
+                'sesion_completada_hoy': True,
+                'puede_entrenar_hoy': False,
+                'sesiones_completadas': plan.sesiones_completadas,
+                'sesiones_totales': sesiones_totales,
+                'sesiones_restantes': max(0, sesiones_totales - plan.sesiones_completadas),
+            }, status=status.HTTP_200_OK)
+
         dias_semana = request.user.dias_entrenamiento or 3
         sesiones_totales = plan.duracion * dias_semana
         sesion_numero = plan.sesiones_completadas + 1
@@ -768,7 +789,38 @@ class IniciarSesionAPIView(APIView):
             plan=plan,
         )
 
-        for ejercicio in plan.rutina_ejercicios.all():
+        # ── Rotación de ejercicios por grupo muscular ──────────
+        # En lugar de repetir siempre los mismos ejercicios,
+        # agrupamos por músculo y en cada sesión rotamos el grupo.
+        # Ejemplo: sesión 1 → pecho/tríceps, sesión 2 → espalda/bíceps, etc.
+        todos_ejercicios = list(plan.rutina_ejercicios.all())
+
+        # Agrupar ejercicios por grupo muscular
+        grupos = {}
+        for ej in todos_ejercicios:
+            grupo = ej.grupo_muscular.lower()
+            if grupo not in grupos:
+                grupos[grupo] = []
+            grupos[grupo].append(ej)
+
+        nombres_grupos = list(grupos.keys())
+
+        if len(nombres_grupos) > 1:
+            # Rotar: según el número de sesión decidimos qué grupos trabajar hoy
+            # Si hay 4 grupos y es sesión 3 → índice 2 → tercer grupo
+            indice = (plan.sesiones_completadas) % len(nombres_grupos)
+            grupo_hoy = nombres_grupos[indice]
+            ejercicios_hoy = grupos[grupo_hoy]
+
+            # Si el grupo tiene pocos ejercicios, añadir el siguiente grupo también
+            if len(ejercicios_hoy) < 3 and len(nombres_grupos) > 1:
+                indice_siguiente = (indice + 1) % len(nombres_grupos)
+                ejercicios_hoy = ejercicios_hoy + grupos[nombres_grupos[indice_siguiente]]
+        else:
+            # Solo hay un grupo muscular — usar todos
+            ejercicios_hoy = todos_ejercicios
+
+        for ejercicio in ejercicios_hoy:
             EjercicioSesion.objects.create(
                 sesion=sesion,
                 rutina_ejercicio=ejercicio,
@@ -995,6 +1047,14 @@ class RegistrarAccesoAPIView(APIView):
 
         alim_hoy = usuario.progreso_alimentacion.filter(fecha=hoy).first()
 
+        # ── Recalcular racha desde RegistroAcceso por si está desincronizada ──
+        # Corrige perfiles donde la racha muestra 0 aunque hayan tenido actividad
+        racha_actual, racha_maxima = _recalcular_racha(usuario)
+        if racha_actual != usuario.racha_actual or racha_maxima != usuario.racha_maxima:
+            usuario.racha_actual = racha_actual
+            usuario.racha_maxima = racha_maxima
+            usuario.save(update_fields=['racha_actual', 'racha_maxima'])
+
         return Response({
             'es_nuevo_acceso': es_nuevo_acceso,
             'fecha': hoy,
@@ -1219,6 +1279,51 @@ class ResumenProgresoAPIView(APIView):
 
 
 # ─── Utilidad interna ─────────────────────────────────────────
+
+def _recalcular_racha(usuario):
+    from datetime import timedelta as td
+
+    hoy = date.today()
+    accesos = list(
+        RegistroAcceso.objects.filter(usuario=usuario)
+        .order_by('-fecha')
+        .values_list('fecha', flat=True)
+    )
+
+    # Si no hay accesos previos pero existe el de hoy (recien creado), racha = 1
+    if not accesos:
+        return 1, max(1, usuario.racha_maxima)
+
+    # Racha actual: contar desde hoy hacia atras
+    racha_actual = 0
+    racha_maxima = usuario.racha_maxima
+    fecha_esperada = hoy
+
+    for fecha in accesos:
+        if fecha == fecha_esperada:
+            racha_actual += 1
+            fecha_esperada = fecha - td(days=1)
+        elif fecha < fecha_esperada:
+            break
+
+    # Si el acceso mas reciente no es de hoy ni de ayer, racha se rompio
+    # pero si hay acceso de hoy garantizamos minimo 1
+    if racha_actual == 0 and accesos and accesos[0] == hoy:
+        racha_actual = 1
+
+    # Racha maxima: recorrer todos los accesos
+    racha_temp = 1
+    for i in range(1, len(accesos)):
+        if (accesos[i - 1] - accesos[i]).days == 1:
+            racha_temp += 1
+            if racha_temp > racha_maxima:
+                racha_maxima = racha_temp
+        else:
+            racha_temp = 1
+
+    racha_maxima = max(racha_maxima, racha_actual)
+    return racha_actual, racha_maxima
+
 
 def _parsear_descanso(descanso_str):
     """
