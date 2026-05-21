@@ -223,6 +223,22 @@ def chat_coach(usuario, mensaje):
     - Nivel de estrés: {usuario.nivel_estres or 'No especificado'}
     """
 
+    # ── Obtener plan de alimentación activo para contexto ─────
+    plan_alimentacion_activo = usuario.planes_alimentacion.filter(activo=True).last()
+    info_plan_alimentacion = ''
+    if plan_alimentacion_activo:
+        comidas = plan_alimentacion_activo.rutina_comidas.all()
+        nombres_comidas = ', '.join([c.nombre for c in comidas])
+        info_plan_alimentacion = f"Plan de alimentación activo con estas comidas: {nombres_comidas}"
+
+    # ── Obtener plan de entrenamiento activo para contexto ────
+    plan_entrenamiento_activo = usuario.planes_entrenamiento.filter(activo=True).last()
+    info_plan_entrenamiento = ''
+    if plan_entrenamiento_activo:
+        ejercicios = plan_entrenamiento_activo.rutina_ejercicios.all()
+        nombres_ejercicios = ', '.join([f"{e.nombre} ({e.grupo_muscular})" for e in ejercicios])
+        info_plan_entrenamiento = f"Plan de entrenamiento activo con estos ejercicios: {nombres_ejercicios}"
+
     prompt = f"""
     Eres TrainerIA, un coach personal experto, empático y motivador.
     Responde en español de forma amigable y personalizada.
@@ -235,6 +251,9 @@ def chat_coach(usuario, mensaje):
     Historial de conversación:
     {contexto if contexto else 'Primera conversación'}
     
+    {info_plan_alimentacion if info_plan_alimentacion else 'El usuario no tiene plan de alimentación activo.'}
+    {info_plan_entrenamiento if info_plan_entrenamiento else 'El usuario no tiene plan de entrenamiento activo.'}
+    
     Campos del perfil que faltan completar:
     {', '.join(campos_faltantes) if campos_faltantes else 'Perfil completo'}
     
@@ -243,15 +262,28 @@ def chat_coach(usuario, mensaje):
     INSTRUCCIONES IMPORTANTES:
     1. Si el usuario quiere modificar algún dato de su perfil, dile que con gusto lo actualizas
        y responde con un JSON al final así: {{"actualizar_perfil": {{"campo": "valor"}}}}
-    2. Si hay campos faltantes y es una buena oportunidad, pregunta UNO solo de forma natural
-    3. Si el usuario menciona una condición médica, alergia o lesión nueva, actualiza su perfil
+    2. Si hay campos faltantes y es una buena oportunidad, pregunta UNO solo de forma natural.
+    3. Si el usuario menciona una condición médica, alergia o lesión nueva, actualiza su perfil.
     4. Responde de forma natural y motivadora. Máximo 3 párrafos.
-    5. Si el usuario pide un plan, primero verifica que tenga el perfil básico completo
+    5. Si el usuario pide un plan, primero verifica que tenga el perfil básico completo.
+    6. CRÍTICO: Si el usuario dice que NO le gusta, que no quiere, que le cae mal,
+       o que quiere evitar CUALQUIER alimento o comida del plan actual,
+       SIEMPRE debes regenerar el plan sin importar si es uno solo o varios alimentos.
+       Actualiza primero las alergias o restricciones del perfil si aplica, y responde con este JSON al final:
+       {{"regenerar_plan_alimentacion": true, "motivo": "razón del cambio"}}
+       NO preguntes si quiere cambiar el plan — hazlo directamente.
+    7. CRÍTICO: Si el usuario menciona que NO puede hacer, que le duele, que no le gusta,
+       o que quiere evitar CUALQUIER ejercicio específico o tipo de movimiento,
+       SIEMPRE debes regenerar el plan sin importar si es uno solo o varios ejercicios.
+       Actualiza primero las lesiones del perfil si aplica, y responde con este JSON al final:
+       {{"regenerar_plan_entrenamiento": true, "motivo": "razón del cambio"}}
+       NO preguntes si quiere cambiar el plan — hazlo directamente.
     """
 
     respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
     texto = respuesta.text.strip()
 
+    # ── Procesar actualización de perfil ──────────────────────
     if '"actualizar_perfil"' in texto:
         try:
             json_match = re.search(r'\{"actualizar_perfil":\s*\{[^}]+\}\}', texto)
@@ -263,6 +295,90 @@ def chat_coach(usuario, mensaje):
                         setattr(usuario, campo, valor)
                 usuario.save()
                 texto = texto[:json_match.start()].strip()
+        except Exception:
+            pass
+
+    # ── Procesar regeneración de plan de alimentación ─────────
+    if '"regenerar_plan_alimentacion"' in texto:
+        try:
+            json_match = re.search(r'\{"regenerar_plan_alimentacion":\s*true[^}]*\}', texto)
+            if json_match:
+                texto = texto[:json_match.start()].strip()
+
+                # Desactivar plan actual si existe
+                if plan_alimentacion_activo:
+                    plan_alimentacion_activo.activo = False
+                    plan_alimentacion_activo.completado = True
+                    plan_alimentacion_activo.save()
+
+                # Generar nuevo plan con las preferencias actualizadas
+                nuevo_plan_data = generar_plan_alimentacion(usuario)
+
+                from .models import PlanAlimentacion, RutinaComida
+                nuevo_plan = PlanAlimentacion.objects.create(
+                    usuario=usuario,
+                    calorias=nuevo_plan_data.get('calorias_diarias', 2000),
+                    objetivo=nuevo_plan_data.get('objetivo', ''),
+                    duracion_dias=nuevo_plan_data.get('duracion_dias', 30),
+                )
+                momento_map = {
+                    'desayuno': 'desayuno', 'almuerzo': 'almuerzo',
+                    'cena': 'cena', 'merienda': 'merienda', 'snack': 'merienda',
+                }
+                for index, comida in enumerate(nuevo_plan_data.get('comidas', [])):
+                    momento = comida.get('momento', 'Almuerzo').lower()
+                    RutinaComida.objects.create(
+                        plan=nuevo_plan,
+                        nombre=comida.get('nombre', ''),
+                        momento=momento_map.get(momento, 'merienda'),
+                        calorias=comida.get('calorias', 0),
+                        proteinas=comida.get('proteinas', 0),
+                        carbohidratos=comida.get('carbohidratos', 0),
+                        grasas=comida.get('grasas', 0),
+                        descripcion=comida.get('descripcion', ''),
+                        ingredientes=comida.get('ingredientes', ''),
+                        preparacion=comida.get('preparacion', ''),
+                        tiempo_preparacion=comida.get('tiempo_preparacion', 0),
+                        orden=index + 1
+                    )
+                texto += '\n\n✅ ¡Listo! Ya generé un nuevo plan de alimentación adaptado a tus preferencias.'
+        except Exception:
+            pass
+
+    # ── Procesar regeneración de plan de entrenamiento ────────
+    if '"regenerar_plan_entrenamiento"' in texto:
+        try:
+            json_match = re.search(r'\{"regenerar_plan_entrenamiento":\s*true[^}]*\}', texto)
+            if json_match:
+                texto = texto[:json_match.start()].strip()
+
+                # Desactivar plan actual si existe
+                if plan_entrenamiento_activo:
+                    plan_entrenamiento_activo.activo = False
+                    plan_entrenamiento_activo.completado = True
+                    plan_entrenamiento_activo.save()
+
+                # Generar nuevo plan con las limitaciones actualizadas
+                nuevo_plan_data = generar_plan_entrenamiento(usuario)
+
+                from .models import PlanEntrenamiento, RutinaEjercicio
+                nuevo_plan = PlanEntrenamiento.objects.create(
+                    usuario=usuario,
+                    tipo_entrenamiento=nuevo_plan_data.get('tipo_entrenamiento', ''),
+                    nivel=nuevo_plan_data.get('nivel', 'Principiante'),
+                    duracion=nuevo_plan_data.get('duracion', 4),
+                )
+                for index, ejercicio in enumerate(nuevo_plan_data.get('ejercicios', [])):
+                    RutinaEjercicio.objects.create(
+                        plan=nuevo_plan,
+                        nombre=ejercicio.get('nombre', ''),
+                        grupo_muscular=ejercicio.get('grupo_muscular', ''),
+                        series=ejercicio.get('series', 3),
+                        repeticiones=ejercicio.get('repeticiones', 10),
+                        descanso=ejercicio.get('descanso', '60 segundos'),
+                        orden=index + 1
+                    )
+                texto += '\n\n✅ ¡Listo! Ya generé un nuevo plan de entrenamiento adaptado a tus limitaciones.'
         except Exception:
             pass
 

@@ -4,12 +4,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 
 class AuthService {
-  static const _keyAccess = 'access_token';
-  static const _keyRefresh = 'refresh_token';
-  static const _keyUsername = 'username';
+  static const _keyAccess     = 'access_token';
+  static const _keyRefresh    = 'refresh_token';
+  static const _keyUsername   = 'username';
   static const _keyOnboarding = 'onboarding_done';
 
-  // ── GUARDAR TOKENS ─────────────────────────────────────────────────────────
+  // ── Headers ───────────────────────────────────────────────
+  // Header ngrok eliminado — ya no aplica con Railway
+  static Map<String, String> get _baseHeaders => {
+    'Content-Type': 'application/json',
+  };
+
+  static Map<String, String> _authHeaders(String token) => {
+    ..._baseHeaders,
+    'Authorization': 'Bearer $token',
+  };
+
+  // ── GUARDAR TOKENS ────────────────────────────────────────
   static Future<void> saveTokens({
     required String access,
     required String? refresh,
@@ -19,7 +30,7 @@ class AuthService {
     if (refresh != null) await prefs.setString(_keyRefresh, refresh);
   }
 
-  // ── USERNAME ───────────────────────────────────────────────────────────────
+  // ── USERNAME ──────────────────────────────────────────────
   static Future<void> saveUsername(String username) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyUsername, username);
@@ -30,18 +41,16 @@ class AuthService {
     return prefs.getString(_keyUsername) ?? 'Usuario';
   }
 
-  // ── TOKEN CRUDO ────────────────────────────────────────────────────────────
+  // ── TOKEN CRUDO ───────────────────────────────────────────
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_keyAccess);
   }
 
-  // ── TOKEN VÁLIDO (refresca automáticamente si expiró) ─────────────────────
-  /// Devuelve un access token fresco, o null si la sesión expiró del todo.
-  /// Llama a /api/perfil/ para verificar; si da 401 intenta el refresh.
+  // ── TOKEN VÁLIDO (refresca automáticamente si expiró) ─────
   static Future<String?> getValidToken() async {
     final prefs = await SharedPreferences.getInstance();
-    final access = prefs.getString(_keyAccess);
+    final access  = prefs.getString(_keyAccess);
     final refresh = prefs.getString(_keyRefresh);
 
     if (access == null) return null;
@@ -50,49 +59,42 @@ class AuthService {
       final testRes = await http
           .get(
             Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
-            headers: {
-              'Content-Type': 'application/json',
-              'ngrok-skip-browser-warning': 'true',
-              'Authorization': 'Bearer $access',
-            },
+            headers: _authHeaders(access),
           )
           .timeout(const Duration(seconds: 6));
 
-      if (testRes.statusCode == 200) return access; // token vigente
+      if (testRes.statusCode == 200) return access;
       if (testRes.statusCode == 401 && refresh != null) {
-        return await _refreshToken(refresh); // intentar refrescar
+        return await _refreshToken(refresh);
       }
     } catch (_) {
-      // Sin red: devolver el token actual y dejar que falle con mensaje claro
       return access;
     }
 
-    return null; // sesión inválida sin posibilidad de refrescar
+    return null;
   }
 
-  // ── REFRESCAR TOKEN ────────────────────────────────────────────────────────
+  // ── REFRESCAR TOKEN ───────────────────────────────────────
   static Future<String?> _refreshToken(String refresh) async {
     try {
       final res = await http
           .post(
             Uri.parse('${ApiConfig.baseUrl}/api/token/refresh/'),
-            headers: {
-              'Content-Type': 'application/json',
-              'ngrok-skip-browser-warning': 'true',
-            },
+            headers: _baseHeaders,
             body: jsonEncode({'refresh': refresh}),
           )
           .timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final newAccess = data['access'] as String?;
+        final data       = jsonDecode(res.body);
+        final newAccess  = data['access']  as String?;
         final newRefresh = data['refresh'] as String?;
         if (newAccess != null) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString(_keyAccess, newAccess);
-          if (newRefresh != null)
+          if (newRefresh != null) {
             await prefs.setString(_keyRefresh, newRefresh);
+          }
           return newAccess;
         }
       }
@@ -100,7 +102,7 @@ class AuthService {
     return null;
   }
 
-  // ── ONBOARDING ─────────────────────────────────────────────────────────────
+  // ── ONBOARDING ────────────────────────────────────────────
   static Future<void> setOnboardingDone() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyOnboarding, true);
@@ -116,11 +118,7 @@ class AuthService {
 
       final res = await http.get(
         Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-          'Authorization': 'Bearer $token',
-        },
+        headers: _authHeaders(token),
       );
 
       if (res.statusCode == 200) {
@@ -134,7 +132,7 @@ class AuthService {
     return false;
   }
 
-  // ── CERRAR SESIÓN ──────────────────────────────────────────────────────────
+  // ── CERRAR SESIÓN ─────────────────────────────────────────
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyAccess);
@@ -143,24 +141,21 @@ class AuthService {
     await prefs.remove(_keyOnboarding);
   }
 
-  // ── LOGIN ──────────────────────────────────────────────────────────────────
+  // ── LOGIN ─────────────────────────────────────────────────
   static Future<Map<String, dynamic>> login({
     required String email,
     required String password,
   }) async {
     final response = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/api/login/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
-      },
+      headers: _baseHeaders,
       body: jsonEncode({'email': email, 'password': password}),
     );
 
     final data = jsonDecode(response.body);
 
     if (response.statusCode == 200) {
-      final accessToken = data['access'] ?? '';
+      final accessToken  = data['access']  ?? '';
       final refreshToken = data['refresh'] as String?;
       await saveTokens(access: accessToken, refresh: refreshToken);
 
@@ -168,14 +163,10 @@ class AuthService {
       try {
         final perfilRes = await http.get(
           Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
-          headers: {
-            'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true',
-            'Authorization': 'Bearer $accessToken',
-          },
+          headers: _authHeaders(accessToken),
         );
         if (perfilRes.statusCode == 200) {
-          final perfil = jsonDecode(perfilRes.body);
+          final perfil   = jsonDecode(perfilRes.body);
           final username = perfil['username'] ?? perfil['user']?['username'];
           if (username != null && username.toString().isNotEmpty) {
             await saveUsername(username.toString());
@@ -191,7 +182,11 @@ class AuthService {
         await saveUsername(email.split('@').first);
       }
 
-      return {'success': true, 'data': data, 'onboarding_done': onboardingDone};
+      return {
+        'success': true,
+        'data': data,
+        'onboarding_done': onboardingDone,
+      };
     } else {
       final mensaje =
           data['detail'] ??
@@ -202,7 +197,7 @@ class AuthService {
     }
   }
 
-  // ── REGISTRO ───────────────────────────────────────────────────────────────
+  // ── REGISTRO ──────────────────────────────────────────────
   static Future<Map<String, dynamic>> registro({
     required String email,
     required String username,
@@ -211,13 +206,10 @@ class AuthService {
   }) async {
     final response = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/api/registro/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
-      },
+      headers: _baseHeaders,
       body: jsonEncode({
-        'email': email,
-        'username': username,
+        'email':     email,
+        'username':  username,
         'password1': password1,
         'password2': password2,
       }),
@@ -228,7 +220,7 @@ class AuthService {
     if (response.statusCode == 200 || response.statusCode == 201) {
       if (data['access'] != null) {
         await saveTokens(
-          access: data['access'] ?? '',
+          access:  data['access']  ?? '',
           refresh: data['refresh'],
         );
       }
@@ -251,16 +243,12 @@ class AuthService {
     }
   }
 
-  // ── OBTENER PERFIL ─────────────────────────────────────────────────────────
+  // ── OBTENER PERFIL ────────────────────────────────────────
   static Future<Map<String, dynamic>> getPerfil() async {
     final token = await getToken();
     final response = await http.get(
       Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
-      headers: {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
-        'Authorization': 'Bearer $token',
-      },
+      headers: _authHeaders(token ?? ''),
     );
 
     if (response.statusCode == 200) {
@@ -269,9 +257,7 @@ class AuthService {
     return {'success': false, 'message': 'No se pudo obtener el perfil'};
   }
 
-  // ── REGISTRAR ACCESO DIARIO (racha y calendario) ───────────────────────────
-  /// Llama a /api/acceso/ con el token actual. Se hace fire-and-forget:
-  /// no bloquea el arranque si falla (sin red, token inválido, etc.).
+  // ── REGISTRAR ACCESO DIARIO ───────────────────────────────
   static Future<void> registrarAcceso() async {
     try {
       final token = await getToken();
@@ -280,16 +266,11 @@ class AuthService {
       await http
           .post(
             Uri.parse('${ApiConfig.baseUrl}/api/acceso/'),
-            headers: {
-              'Content-Type': 'application/json',
-              'ngrok-skip-browser-warning': 'true',
-              'Authorization': 'Bearer $token',
-            },
+            headers: _authHeaders(token),
           )
           .timeout(const Duration(seconds: 6));
     } catch (_) {
-      // Si falla (sin red, 4xx, timeout) simplemente lo ignoramos.
-      // La racha se actualizará la próxima vez que haya conexión.
+      // Fire-and-forget: si falla no bloquea el arranque
     }
   }
 }
