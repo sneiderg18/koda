@@ -1,0 +1,2 @@
+[deploy]
+startCommand = "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn la_trainer.wsgi --workers 2 --timeout 120 --log-level info"
