@@ -8,6 +8,7 @@ urlpatterns = [
     path('registro/', api_views.RegistroAPIView.as_view(), name='api_registro'),
     path('login/', api_views.LoginAPIView.as_view(), name='api_login'),
     path('logout/', api_views.LogoutAPIView.as_view(), name='api_logout'),
+    path('avatares/', api_views.AvatarListAPIView.as_view(), name='api_avatares'),
     path('token/refresh/', TokenRefreshView.as_view(), name='api_token_refresh'),
 
     # ─── Perfil y onboarding ─────────────────────────────────

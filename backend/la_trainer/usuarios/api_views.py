@@ -1340,6 +1340,82 @@ def _parsear_descanso(descanso_str):
         return valor * 60
 
 
+
+# ─── Avatares predeterminados ─────────────────────────────────
+
+class AvatarListAPIView(APIView):
+    """
+    GET /api/avatares/
+    Devuelve la lista de avatares disponibles para que Flutter los muestre.
+    El usuario elige uno y lo guarda con PUT /api/perfil/ -> {avatar: 'avatar_1'}
+    """
+    permission_classes = [IsAuthenticated]
+
+    AVATARES = [
+        {
+            'id': 'avatar_1',
+            'nombre': 'Corredor',
+            'descripcion': 'Para los amantes del cardio y las carreras',
+            'emoji': '🏃',
+        },
+        {
+            'id': 'avatar_2',
+            'nombre': 'Levantador',
+            'descripcion': 'Para los que van al gimnasio a levantar pesas',
+            'emoji': '🏋️',
+        },
+        {
+            'id': 'avatar_3',
+            'nombre': 'Yogui',
+            'descripcion': 'Para los amantes del yoga y la flexibilidad',
+            'emoji': '🧘',
+        },
+        {
+            'id': 'avatar_4',
+            'nombre': 'Ciclista',
+            'descripcion': 'Para los que disfrutan el ciclismo',
+            'emoji': '🚴',
+        },
+        {
+            'id': 'avatar_5',
+            'nombre': 'Nadador',
+            'descripcion': 'Para los que entrenan en la piscina',
+            'emoji': '🏊',
+        },
+        {
+            'id': 'avatar_6',
+            'nombre': 'Boxeador',
+            'descripcion': 'Para los que entrenan artes marciales o boxeo',
+            'emoji': '🥊',
+        },
+        {
+            'id': 'avatar_7',
+            'nombre': 'Escalador',
+            'descripcion': 'Para los amantes de la escalada y el outdoor',
+            'emoji': '🧗',
+        },
+        {
+            'id': 'avatar_8',
+            'nombre': 'Bailarín',
+            'descripcion': 'Para los que entrenan con baile o zumba',
+            'emoji': '💃',
+        },
+    ]
+
+    def get(self, request):
+        avatar_actual = request.user.avatar or 'avatar_1'
+        avatares = []
+        for av in self.AVATARES:
+            avatares.append({
+                **av,
+                'seleccionado': av['id'] == avatar_actual,
+            })
+        return Response({
+            'avatar_actual': avatar_actual,
+            'avatares': avatares,
+        })
+
+
 # ─── Logout con blacklist JWT ─────────────────────────────────
 
 class LogoutAPIView(APIView):
