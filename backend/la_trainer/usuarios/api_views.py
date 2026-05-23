@@ -1338,4 +1338,65 @@ def _parsear_descanso(descanso_str):
     valor = int(numeros[0])
     if 'min' in texto:
         return valor * 60
-    return valor
+
+
+# ─── Logout con blacklist JWT ─────────────────────────────────
+
+class LogoutAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data.get('refresh')
+            if not refresh_token:
+                return Response(
+                    {'error': 'Se requiere el refresh token.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(
+                {'mensaje': 'Sesión cerrada correctamente.'},
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {'error': 'Token inválido o ya fue invalidado.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+# ─── Rate limiting — throttle personalizado para login ────────
+
+from rest_framework.throttling import AnonRateThrottle
+
+class LoginRateThrottle(AnonRateThrottle):
+    rate = '5/minute'
+    scope = 'login'
+
+
+class LoginAPIView(APIView):
+    """
+    Login con rate limiting — máximo 5 intentos por minuto por IP.
+    Reemplaza a TokenObtainPairView en api_urls.py.
+    Acepta email + password y devuelve access + refresh tokens.
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
+
+    def post(self, request):
+        from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+        from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+
+        serializer = TokenObtainPairSerializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as e:
+            raise InvalidToken(e.args[0])
+        except Exception:
+            return Response(
+                {'error': 'Correo o contraseña incorrectos.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
