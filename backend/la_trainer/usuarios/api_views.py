@@ -1341,6 +1341,59 @@ def _parsear_descanso(descanso_str):
 
 
 
+
+# ─── Detalle ejercicio con IA ─────────────────────────────────
+
+class DetalleEjercicioIAAPIView(APIView):
+    """
+    GET /api/ejercicios/<pk>/detalle/
+    Genera descripción y técnica del ejercicio usando IA.
+    Guarda el resultado en descripcion_ia para no volver a llamar a Gemini
+    si ya fue generado antes (cache en BD).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        from .models import RutinaEjercicio
+        from . import ia_service
+
+        try:
+            ejercicio = RutinaEjercicio.objects.get(pk=pk, plan__usuario=request.user)
+        except RutinaEjercicio.DoesNotExist:
+            return Response(
+                {'error': 'Ejercicio no encontrado.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Si ya tiene descripción generada, devolverla sin llamar a Gemini
+        if ejercicio.descripcion_ia:
+            try:
+                import json
+                detalle = json.loads(ejercicio.descripcion_ia)
+                return Response({**detalle, 'desde_cache': True})
+            except Exception:
+                pass
+
+        # Generar con IA
+        try:
+            detalle = ia_service.generar_descripcion_ejercicio(
+                ejercicio.nombre,
+                ejercicio.grupo_muscular
+            )
+            # Guardar en BD para no volver a generarlo
+            import json
+            ejercicio.descripcion_ia = json.dumps(detalle, ensure_ascii=False)
+            ejercicio.save(update_fields=['descripcion_ia'])
+
+            return Response({**detalle, 'desde_cache': False})
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 # ─── Avatares predeterminados ─────────────────────────────────
 
 class AvatarListAPIView(APIView):

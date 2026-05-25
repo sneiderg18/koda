@@ -253,6 +253,10 @@ class RutinaEjercicio(models.Model):
     repeticiones = models.PositiveIntegerField()
     descanso = models.CharField(max_length=50, help_text="Ej: 60 segundos")
     orden = models.PositiveIntegerField(default=1, help_text="Orden en la rutina")
+    imagen_url = models.URLField(blank=True, null=True,
+        help_text="URL de imagen o GIF del ejercicio")
+    descripcion_ia = models.TextField(blank=True,
+        help_text="Descripción y técnica generada por IA")
 
     class Meta:
         ordering = ['orden']
@@ -285,6 +289,8 @@ class RutinaComida(models.Model):
     preparacion = models.TextField(blank=True, help_text="Pasos para preparar la comida")
     tiempo_preparacion = models.PositiveIntegerField(default=0, help_text="Tiempo en minutos")
     orden = models.PositiveIntegerField(default=1)
+    imagen_url = models.URLField(blank=True, null=True,
+        help_text="URL de imagen del plato o comida")
 
     class Meta:
         ordering = ['orden']

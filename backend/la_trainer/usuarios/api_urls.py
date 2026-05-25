@@ -18,6 +18,7 @@ urlpatterns = [
     # ─── Ejercicios ──────────────────────────────────────────
     path('ejercicios/', api_views.EjercicioListAPIView.as_view(), name='api_ejercicios'),
     path('ejercicios/<int:pk>/', api_views.EjercicioDetalleAPIView.as_view(), name='api_ejercicio_detalle'),
+    path('ejercicios/<int:pk>/detalle/', api_views.DetalleEjercicioIAAPIView.as_view(), name='api_ejercicio_detalle_ia'),
 
     # ─── Planes entrenamiento (específicas antes de <pk>) ────
     path('planes/entrenamiento/', api_views.PlanEntrenamientoAPIView.as_view(), name='api_planes_entrenamiento'),
