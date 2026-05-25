@@ -422,6 +422,10 @@ class RegistroAcceso(models.Model):
         ],
         help_text="Copia del nivel_cumplimiento de ProgresoAlimentacion para acceso rápido"
     )
+    grupos_musculares = models.CharField(
+        max_length=500, blank=True,
+        help_text="Grupos musculares trabajados en la sesion del dia, separados por coma"
+    )
 
     class Meta:
         unique_together = ('usuario', 'fecha')

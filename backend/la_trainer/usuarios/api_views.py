@@ -911,7 +911,18 @@ class CompletarEjercicioAPIView(APIView):
                 usuario=request.user, fecha=hoy
             )
             registro_acceso.entreno = True
-            registro_acceso.save(update_fields=['entreno'])
+
+            # Guardar grupos musculares trabajados en la sesion
+            ejercicios_completados = sesion.ejercicios_completados.filter(completado=True)
+            grupos = list(set([
+                e.rutina_ejercicio.grupo_muscular
+                for e in ejercicios_completados
+                if e.rutina_ejercicio.grupo_muscular
+            ]))
+            if grupos:
+                registro_acceso.grupos_musculares = ', '.join(grupos)
+
+            registro_acceso.save(update_fields=['entreno', 'grupos_musculares'])
 
             if plan.sesiones_completadas >= sesiones_totales:
                 plan.completado = True
@@ -1139,6 +1150,7 @@ class CalendarioProgresoAPIView(APIView):
                 'entreno': entreno,
                 'cumplio_alimentacion': bool(nivel_alim),
                 'nivel_alimentacion': nivel_alim,
+                'grupos_musculares': acceso.grupos_musculares.split(', ') if acceso and acceso.grupos_musculares else [],
                 'es_futuro': dia_actual > hoy,
                 'es_hoy': dia_actual == hoy,
             })
@@ -1236,11 +1248,18 @@ class ResumenProgresoAPIView(APIView):
         ).order_by('-fecha_inicio')[:7]:
             total = s.ejercicios_completados.count()
             hechos = s.ejercicios_completados.filter(completado=True).count()
+            # Obtener grupos musculares trabajados en esta sesion
+            grupos = list(set([
+                e.rutina_ejercicio.grupo_muscular
+                for e in s.ejercicios_completados.filter(completado=True)
+                if e.rutina_ejercicio.grupo_muscular
+            ]))
             sesiones_recientes.append({
                 'fecha': s.fecha_inicio.date().isoformat(),
                 'ejercicios_completados': hechos,
                 'ejercicios_totales': total,
                 'porcentaje': round(hechos / total * 100, 1) if total else 0,
+                'grupos_musculares': grupos,
             })
 
         # ── Cumplimiento de alimentación últimos 7 días ───────

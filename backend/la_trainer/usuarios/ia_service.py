@@ -144,6 +144,38 @@ def analizar_progreso(usuario):
         for p in progresos
     ])
 
+    # Obtener grupos musculares trabajados en los ultimos 7 dias
+    from datetime import date, timedelta
+    from .models import RegistroAcceso
+    hace_7_dias = date.today() - timedelta(days=7)
+    registros_recientes = RegistroAcceso.objects.filter(
+        usuario=usuario,
+        fecha__gte=hace_7_dias,
+        entreno=True
+    ).exclude(grupos_musculares='')
+
+    grupos_semana = []
+    for r in registros_recientes:
+        if r.grupos_musculares:
+            grupos_semana.extend(r.grupos_musculares.split(', '))
+
+    from collections import Counter
+    conteo_grupos = Counter(grupos_semana)
+    grupos_mas_trabajados = ', '.join([f"{g} ({c}x)" for g, c in conteo_grupos.most_common()])
+    grupos_poco_trabajados = [g for g, c in conteo_grupos.items() if c == 1]
+
+    # Ultimas sesiones con grupos musculares
+    sesiones_recientes = RegistroAcceso.objects.filter(
+        usuario=usuario,
+        entreno=True,
+        fecha__gte=hace_7_dias
+    ).order_by('-fecha')[:7]
+
+    historial_sesiones = '\n'.join([
+        f"- {r.fecha}: grupos trabajados: {r.grupos_musculares or 'no registrado'}"
+        for r in sesiones_recientes
+    ])
+
     prompt = f"""
     Eres un entrenador personal experto. Analiza el progreso del usuario y ajusta su plan.
     
@@ -151,16 +183,24 @@ def analizar_progreso(usuario):
     - Nombre: {usuario.username}
     - Objetivo: {usuario.objetivo or 'No especificado'}
     
-    Historial de progreso:
-    {historial if historial else 'Sin registros aún'}
+    Historial de peso (ultimos registros):
+    {historial if historial else 'Sin registros de peso aun'}
     
-    Responde SOLO con un JSON válido con esta estructura exacta:
+    Sesiones de entrenamiento (ultimos 7 dias):
+    {historial_sesiones if historial_sesiones else 'Sin sesiones registradas'}
+    
+    Grupos musculares mas trabajados esta semana: {grupos_mas_trabajados or 'Ninguno aun'}
+    Grupos musculares poco trabajados: {', '.join(grupos_poco_trabajados) if grupos_poco_trabajados else 'Todos equilibrados'}
+    
+    Responde SOLO con un JSON valido con esta estructura exacta:
     {{
-        "analisis": "análisis detallado del progreso",
+        "analisis": "analisis detallado del progreso incluyendo equilibrio muscular",
         "esta_progresando": true,
-        "recomendacion": "recomendación principal",
-        "ajustes_plan": "ajustes sugeridos al plan de entrenamiento",
-        "ajustes_alimentacion": "ajustes sugeridos al plan de alimentación"
+        "recomendacion": "recomendacion principal",
+        "ajustes_plan": "ajustes sugeridos al plan de entrenamiento segun grupos musculares trabajados",
+        "ajustes_alimentacion": "ajustes sugeridos al plan de alimentacion",
+        "grupos_descansados": "grupos musculares que deben descansar hoy",
+        "grupos_sugeridos": "grupos musculares recomendados para entrenar hoy"
     }}
     """
     respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
