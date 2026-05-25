@@ -1066,11 +1066,14 @@ class RegistrarAccesoAPIView(APIView):
             usuario.racha_maxima = racha_maxima
             usuario.save(update_fields=['racha_actual', 'racha_maxima'])
 
+        dias_inactivos = _calcular_dias_inactivos(usuario)
+
         return Response({
             'es_nuevo_acceso': es_nuevo_acceso,
             'fecha': hoy,
             'racha_actual': usuario.racha_actual,
             'racha_maxima': usuario.racha_maxima,
+            'dias_inactivos': dias_inactivos,
             'entreno_hoy': sesion_hoy,
             'registro_alim_hoy': alim_hoy.nivel_cumplimiento if alim_hoy else None,
             'cumplio_alimentacion_hoy': alim_hoy is not None,
@@ -1309,11 +1312,11 @@ def _recalcular_racha(usuario):
         .values_list('fecha', flat=True)
     )
 
-    # Si no hay accesos previos pero existe el de hoy (recien creado), racha = 1
+    # Usuario nuevo o sin accesos previos — primer acceso = racha 1
     if not accesos:
         return 1, max(1, usuario.racha_maxima)
 
-    # Racha actual: contar desde hoy hacia atras
+    # Racha actual: contar desde hoy hacia atras en dias consecutivos
     racha_actual = 0
     racha_maxima = usuario.racha_maxima
     fecha_esperada = hoy
@@ -1325,15 +1328,18 @@ def _recalcular_racha(usuario):
         elif fecha < fecha_esperada:
             break
 
-    # Si el acceso mas reciente no es de hoy ni de ayer, racha se rompio
-    # pero si hay acceso de hoy garantizamos minimo 1
+    # Garantizar minimo 1 si hay acceso hoy (usuario que regresa despues de inactividad)
     if racha_actual == 0 and accesos and accesos[0] == hoy:
         racha_actual = 1
 
-    # Racha maxima: recorrer todos los accesos
+    # Si no hay acceso hoy ni ayer, la racha se rompio — vuelve a 1 al reingresar
+    # Esto se maneja en registrar_acceso_hoy() del modelo
+
+    # Racha maxima historica: recorrer todos los accesos
     racha_temp = 1
     for i in range(1, len(accesos)):
-        if (accesos[i - 1] - accesos[i]).days == 1:
+        diff = (accesos[i - 1] - accesos[i]).days
+        if diff == 1:
             racha_temp += 1
             if racha_temp > racha_maxima:
                 racha_maxima = racha_temp
@@ -1342,6 +1348,19 @@ def _recalcular_racha(usuario):
 
     racha_maxima = max(racha_maxima, racha_actual)
     return racha_actual, racha_maxima
+
+
+def _calcular_dias_inactivos(usuario):
+    """
+    Calcula los dias que el usuario NO ha ingresado a la app
+    desde su registro hasta hoy.
+    """
+    hoy = date.today()
+    fecha_registro = usuario.date_joined.date()
+    total_dias = (hoy - fecha_registro).days + 1
+
+    dias_activos = RegistroAcceso.objects.filter(usuario=usuario).count()
+    return max(0, total_dias - dias_activos)
 
 
 def _parsear_descanso(descanso_str):
@@ -1414,6 +1433,137 @@ class DetalleEjercicioIAAPIView(APIView):
 
 
 # ─── Avatares predeterminados ─────────────────────────────────
+
+
+class GraficaProgresoAPIView(APIView):
+    """
+    GET /api/progreso/grafica/
+    Devuelve la evolucion de peso del usuario en 3 vistas:
+    - ?vista=dias     → ultimos 30 dias (default)
+    - ?vista=semanas  → agrupado por semana
+    - ?vista=meses    → agrupado por mes
+    - ?vista=total    → desde el registro hasta hoy
+
+    Cada punto tiene: fecha, peso, etiqueta
+    Tambien devuelve: peso_inicial, peso_actual, diferencia, tendencia
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .models import Progreso
+        from datetime import timedelta
+        from collections import defaultdict
+
+        usuario = request.user
+        vista = request.query_params.get('vista', 'dias')
+
+        # Todos los registros de peso ordenados por fecha
+        progresos = Progreso.objects.filter(
+            usuario=usuario
+        ).order_by('fecha').values('fecha', 'peso')
+
+        if not progresos:
+            return Response({
+                'vista': vista,
+                'puntos': [],
+                'peso_inicial': usuario.peso,
+                'peso_actual': usuario.peso,
+                'diferencia': 0,
+                'tendencia': 'sin_datos',
+                'mensaje': 'Aun no tienes registros de peso. Registra tu peso periodicamente para ver tu progreso.',
+            })
+
+        progresos = list(progresos)
+        peso_inicial = progresos[0]['peso']
+        peso_actual = progresos[-1]['peso']
+        diferencia = round(peso_actual - peso_inicial, 2)
+        tendencia = 'bajando' if diferencia < 0 else 'subiendo' if diferencia > 0 else 'estable'
+
+        hoy = date.today()
+        puntos = []
+
+        if vista == 'dias':
+            # Ultimos 30 dias — un punto por dia con registro
+            hace_30 = hoy - timedelta(days=30)
+            puntos = [
+                {
+                    'fecha': p['fecha'].isoformat(),
+                    'peso': p['peso'],
+                    'etiqueta': p['fecha'].strftime('%d/%m'),
+                }
+                for p in progresos
+                if p['fecha'] >= hace_30
+            ]
+
+        elif vista == 'semanas':
+            # Agrupar por semana — promedio de peso por semana
+            semanas = defaultdict(list)
+            for p in progresos:
+                # Lunes de la semana como clave
+                lunes = p['fecha'] - timedelta(days=p['fecha'].weekday())
+                semanas[lunes].append(p['peso'])
+
+            for lunes, pesos in sorted(semanas.items()):
+                promedio = round(sum(pesos) / len(pesos), 2)
+                domingo = lunes + timedelta(days=6)
+                puntos.append({
+                    'fecha': lunes.isoformat(),
+                    'peso': promedio,
+                    'etiqueta': f"{lunes.strftime('%d/%m')} - {domingo.strftime('%d/%m')}",
+                    'registros': len(pesos),
+                })
+
+        elif vista == 'meses':
+            # Agrupar por mes — promedio de peso por mes
+            meses = defaultdict(list)
+            for p in progresos:
+                clave = p['fecha'].strftime('%Y-%m')
+                meses[clave].append(p['peso'])
+
+            meses_nombres = {
+                '01': 'Ene', '02': 'Feb', '03': 'Mar', '04': 'Abr',
+                '05': 'May', '06': 'Jun', '07': 'Jul', '08': 'Ago',
+                '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dic',
+            }
+            for clave, pesos in sorted(meses.items()):
+                anio, mes = clave.split('-')
+                promedio = round(sum(pesos) / len(pesos), 2)
+                puntos.append({
+                    'fecha': f"{clave}-01",
+                    'peso': promedio,
+                    'etiqueta': f"{meses_nombres[mes]} {anio}",
+                    'registros': len(pesos),
+                })
+
+        elif vista == 'total':
+            # Todos los registros desde el inicio
+            puntos = [
+                {
+                    'fecha': p['fecha'].isoformat(),
+                    'peso': p['peso'],
+                    'etiqueta': p['fecha'].strftime('%d/%m/%Y'),
+                }
+                for p in progresos
+            ]
+
+        # Peso objetivo si lo tiene en el perfil
+        objetivo_peso = None
+        if usuario.objetivo == 'bajar_peso' and usuario.peso:
+            objetivo_peso = round(usuario.peso * 0.9, 1)
+        elif usuario.objetivo == 'aumentar_masa' and usuario.peso:
+            objetivo_peso = round(usuario.peso * 1.05, 1)
+
+        return Response({
+            'vista': vista,
+            'puntos': puntos,
+            'peso_inicial': peso_inicial,
+            'peso_actual': peso_actual,
+            'diferencia': diferencia,
+            'tendencia': tendencia,
+            'objetivo_peso': objetivo_peso,
+            'total_registros': len(progresos),
+        })
+
 
 class AvatarListAPIView(APIView):
     """
