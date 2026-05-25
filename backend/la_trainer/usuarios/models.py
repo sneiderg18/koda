@@ -93,6 +93,27 @@ class Usuario(AbstractUser):
     ultimo_acceso = models.DateField(null=True, blank=True,
         help_text="Último día que el usuario abrió la app")
 
+
+    # ─── Términos y condiciones ───────────────────────────────
+    acepto_terminos = models.BooleanField(default=False,
+        help_text="El usuario aceptó los términos y condiciones al registrarse")
+    fecha_acepto_terminos = models.DateTimeField(null=True, blank=True,
+        help_text="Fecha en que aceptó los términos")
+
+    # ─── Avatar predeterminado ────────────────────────────────
+    AVATARES = [
+        ('avatar_1', 'Avatar 1 — Corredor'),
+        ('avatar_2', 'Avatar 2 — Levantador'),
+        ('avatar_3', 'Avatar 3 — Yogui'),
+        ('avatar_4', 'Avatar 4 — Ciclista'),
+        ('avatar_5', 'Avatar 5 — Nadador'),
+        ('avatar_6', 'Avatar 6 — Boxeador'),
+        ('avatar_7', 'Avatar 7 — Escalador'),
+        ('avatar_8', 'Avatar 8 — Bailarín'),
+    ]
+    avatar = models.CharField(max_length=20, blank=True, default='avatar_1',
+        choices=AVATARES, help_text="Avatar predeterminado seleccionado por el usuario")
+
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
 
@@ -232,6 +253,10 @@ class RutinaEjercicio(models.Model):
     repeticiones = models.PositiveIntegerField()
     descanso = models.CharField(max_length=50, help_text="Ej: 60 segundos")
     orden = models.PositiveIntegerField(default=1, help_text="Orden en la rutina")
+    imagen_url = models.URLField(blank=True, null=True,
+        help_text="URL de imagen o GIF del ejercicio")
+    descripcion_ia = models.TextField(blank=True,
+        help_text="Descripción y técnica generada por IA")
 
     class Meta:
         ordering = ['orden']
@@ -264,6 +289,8 @@ class RutinaComida(models.Model):
     preparacion = models.TextField(blank=True, help_text="Pasos para preparar la comida")
     tiempo_preparacion = models.PositiveIntegerField(default=0, help_text="Tiempo en minutos")
     orden = models.PositiveIntegerField(default=1)
+    imagen_url = models.URLField(blank=True, null=True,
+        help_text="URL de imagen del plato o comida")
 
     class Meta:
         ordering = ['orden']

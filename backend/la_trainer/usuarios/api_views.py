@@ -1338,4 +1338,194 @@ def _parsear_descanso(descanso_str):
     valor = int(numeros[0])
     if 'min' in texto:
         return valor * 60
-    return valor
+
+
+
+
+# ─── Detalle ejercicio con IA ─────────────────────────────────
+
+class DetalleEjercicioIAAPIView(APIView):
+    """
+    GET /api/ejercicios/<pk>/detalle/
+    Genera descripción y técnica del ejercicio usando IA.
+    Guarda el resultado en descripcion_ia para no volver a llamar a Gemini
+    si ya fue generado antes (cache en BD).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        from .models import RutinaEjercicio
+        from . import ia_service
+
+        try:
+            ejercicio = RutinaEjercicio.objects.get(pk=pk, plan__usuario=request.user)
+        except RutinaEjercicio.DoesNotExist:
+            return Response(
+                {'error': 'Ejercicio no encontrado.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Si ya tiene descripción generada, devolverla sin llamar a Gemini
+        if ejercicio.descripcion_ia:
+            try:
+                import json
+                detalle = json.loads(ejercicio.descripcion_ia)
+                return Response({**detalle, 'desde_cache': True})
+            except Exception:
+                pass
+
+        # Generar con IA
+        try:
+            detalle = ia_service.generar_descripcion_ejercicio(
+                ejercicio.nombre,
+                ejercicio.grupo_muscular
+            )
+            # Guardar en BD para no volver a generarlo
+            import json
+            ejercicio.descripcion_ia = json.dumps(detalle, ensure_ascii=False)
+            ejercicio.save(update_fields=['descripcion_ia'])
+
+            return Response({**detalle, 'desde_cache': False})
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# ─── Avatares predeterminados ─────────────────────────────────
+
+class AvatarListAPIView(APIView):
+    """
+    GET /api/avatares/
+    Devuelve la lista de avatares disponibles para que Flutter los muestre.
+    El usuario elige uno y lo guarda con PUT /api/perfil/ -> {avatar: 'avatar_1'}
+    """
+    permission_classes = [IsAuthenticated]
+
+    AVATARES = [
+        {
+            'id': 'avatar_1',
+            'nombre': 'Corredor',
+            'descripcion': 'Para los amantes del cardio y las carreras',
+            'emoji': '🏃',
+        },
+        {
+            'id': 'avatar_2',
+            'nombre': 'Levantador',
+            'descripcion': 'Para los que van al gimnasio a levantar pesas',
+            'emoji': '🏋️',
+        },
+        {
+            'id': 'avatar_3',
+            'nombre': 'Yogui',
+            'descripcion': 'Para los amantes del yoga y la flexibilidad',
+            'emoji': '🧘',
+        },
+        {
+            'id': 'avatar_4',
+            'nombre': 'Ciclista',
+            'descripcion': 'Para los que disfrutan el ciclismo',
+            'emoji': '🚴',
+        },
+        {
+            'id': 'avatar_5',
+            'nombre': 'Nadador',
+            'descripcion': 'Para los que entrenan en la piscina',
+            'emoji': '🏊',
+        },
+        {
+            'id': 'avatar_6',
+            'nombre': 'Boxeador',
+            'descripcion': 'Para los que entrenan artes marciales o boxeo',
+            'emoji': '🥊',
+        },
+        {
+            'id': 'avatar_7',
+            'nombre': 'Escalador',
+            'descripcion': 'Para los amantes de la escalada y el outdoor',
+            'emoji': '🧗',
+        },
+        {
+            'id': 'avatar_8',
+            'nombre': 'Bailarín',
+            'descripcion': 'Para los que entrenan con baile o zumba',
+            'emoji': '💃',
+        },
+    ]
+
+    def get(self, request):
+        avatar_actual = request.user.avatar or 'avatar_1'
+        avatares = []
+        for av in self.AVATARES:
+            avatares.append({
+                **av,
+                'seleccionado': av['id'] == avatar_actual,
+            })
+        return Response({
+            'avatar_actual': avatar_actual,
+            'avatares': avatares,
+        })
+
+
+# ─── Logout con blacklist JWT ─────────────────────────────────
+
+class LogoutAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data.get('refresh')
+            if not refresh_token:
+                return Response(
+                    {'error': 'Se requiere el refresh token.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(
+                {'mensaje': 'Sesión cerrada correctamente.'},
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {'error': 'Token inválido o ya fue invalidado.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+# ─── Rate limiting — throttle personalizado para login ────────
+
+from rest_framework.throttling import AnonRateThrottle
+
+class LoginRateThrottle(AnonRateThrottle):
+    rate = '5/minute'
+    scope = 'login'
+
+
+class LoginAPIView(APIView):
+    """
+    Login con rate limiting — máximo 5 intentos por minuto por IP.
+    Reemplaza a TokenObtainPairView en api_urls.py.
+    Acepta email + password y devuelve access + refresh tokens.
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
+
+    def post(self, request):
+        from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+        from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+
+        serializer = TokenObtainPairSerializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as e:
+            raise InvalidToken(e.args[0])
+        except Exception:
+            return Response(
+                {'error': 'Correo o contraseña incorrectos.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
