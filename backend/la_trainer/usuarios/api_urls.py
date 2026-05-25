@@ -73,4 +73,11 @@ urlpatterns = [
     # GET /api/progreso/calendario/           → mes actual
     # GET /api/progreso/calendario/?año=2025&mes=3  → mes específico
     path('progreso/calendario/', api_views.CalendarioProgresoAPIView.as_view(), name='api_progreso_calendario'),
+
+    # Grafica de evolucion de peso
+    # GET /api/progreso/grafica/              → ultimos 30 dias
+    # GET /api/progreso/grafica/?vista=semanas → por semana
+    # GET /api/progreso/grafica/?vista=meses   → por mes
+    # GET /api/progreso/grafica/?vista=total   → desde el inicio
+    path('progreso/grafica/', api_views.GraficaProgresoAPIView.as_view(), name='api_progreso_grafica'),
 ]
