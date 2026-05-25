@@ -16,6 +16,58 @@ def _limpiar_json(texto):
     return texto.strip()
 
 
+
+def _buscar_imagen_ejercicio(nombre_ejercicio):
+    """
+    Busca la imagen de un ejercicio en la API pública de Wger.
+    Devuelve la URL de la imagen o cadena vacía si no encuentra.
+    """
+    import requests
+    try:
+        # Traducir términos comunes al inglés para mejor búsqueda
+        terminos = {
+            'press': 'press', 'sentadilla': 'squat', 'peso muerto': 'deadlift',
+            'dominada': 'pull-up', 'fondos': 'dip', 'plancha': 'plank',
+            'remo': 'row', 'curl': 'curl', 'extension': 'extension',
+            'elevacion': 'raise', 'aperturas': 'fly', 'burpee': 'burpee',
+            'zancada': 'lunge', 'hip thrust': 'hip thrust', 'crunch': 'crunch',
+        }
+        nombre_lower = nombre_ejercicio.lower()
+        termino_busqueda = nombre_ejercicio
+        for es, en in terminos.items():
+            if es in nombre_lower:
+                termino_busqueda = en
+                break
+
+        res = requests.get(
+            'https://wger.de/api/v2/exercise/',
+            params={
+                'format': 'json',
+                'language': 2,
+                'name': termino_busqueda,
+                'limit': 5,
+            },
+            timeout=5
+        )
+        if res.status_code == 200:
+            data = res.json()
+            if data.get('results'):
+                ejercicio_id = data['results'][0].get('exercise_base_id') or data['results'][0].get('id')
+                if ejercicio_id:
+                    img_res = requests.get(
+                        f'https://wger.de/api/v2/exerciseimage/',
+                        params={'format': 'json', 'exercise_base': ejercicio_id},
+                        timeout=5
+                    )
+                    if img_res.status_code == 200:
+                        imgs = img_res.json().get('results', [])
+                        if imgs:
+                            return imgs[0].get('image', '')
+    except Exception:
+        pass
+    return ''
+
+
 def generar_plan_entrenamiento(usuario):
     prompt = f"""
     Eres un entrenador personal experto. Genera un plan de entrenamiento personalizado en español.
@@ -52,7 +104,14 @@ def generar_plan_entrenamiento(usuario):
     }}
     """
     respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
-    return json.loads(_limpiar_json(respuesta.text))
+    resultado = json.loads(_limpiar_json(respuesta.text))
+
+    # Buscar imagen en Wger para cada ejercicio
+    for ejercicio in resultado.get('ejercicios', []):
+        imagen = _buscar_imagen_ejercicio(ejercicio.get('nombre', ''))
+        ejercicio['imagen_url'] = imagen
+
+    return resultado
 
 
 def generar_plan_alimentacion(usuario, plan_anterior=None):
@@ -134,7 +193,16 @@ def generar_plan_alimentacion(usuario, plan_anterior=None):
     }}
     """
     respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
-    return json.loads(_limpiar_json(respuesta.text))
+    resultado = json.loads(_limpiar_json(respuesta.text))
+
+    # Agregar imagen_url a cada comida usando Unsplash Source (sin API key)
+    # Flutter puede usar esta URL directamente con Image.network()
+    for comida in resultado.get('comidas', []):
+        nombre_comida = comida.get('nombre', '').replace(' ', '+')
+        # Unsplash Source devuelve imagen aleatoria de comida por query
+        comida['imagen_url'] = f'https://source.unsplash.com/400x300/?food,{nombre_comida}'
+
+    return resultado
 
 
 def analizar_progreso(usuario):

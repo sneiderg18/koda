@@ -48,7 +48,8 @@ class GenerarPlanEntrenamientoAPIView(APIView):
                     series=ejercicio.get('series', 3),
                     repeticiones=ejercicio.get('repeticiones', 10),
                     descanso=ejercicio.get('descanso', '60 segundos'),
-                    orden=index + 1
+                    orden=index + 1,
+                    imagen_url=ejercicio.get('imagen_url', ''),
                 )
 
             Conversacion.objects.create(
@@ -128,7 +129,8 @@ class GenerarPlanAlimentacionAPIView(APIView):
                     ingredientes=comida.get('ingredientes', ''),
                     preparacion=comida.get('preparacion', ''),
                     tiempo_preparacion=comida.get('tiempo_preparacion', 0),
-                    orden=index + 1
+                    orden=index + 1,
+                    imagen_url=comida.get('imagen_url', ''),
                 )
 
             Conversacion.objects.create(
