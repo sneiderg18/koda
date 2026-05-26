@@ -6,8 +6,13 @@
         </trust-anchors>
     </base-config>
     <domain-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
         <domain includeSubdomains="true">ngrok-free.dev</domain>
         <domain includeSubdomains="true">ngrok-free.app</domain>
         <domain includeSubdomains="true">ngrok.io</domain>
+        <domain includeSubdomains="true">wger.de</domain>
+        <domain includeSubdomains="true">railway.app</domain>
     </domain-config>
 </network-security-config>

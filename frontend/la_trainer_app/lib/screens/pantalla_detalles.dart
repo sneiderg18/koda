@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -11,7 +12,8 @@ const _kBg   = Color(0xFF0D0D0D);
 const _kCard = Color(0xFF1C1C1C);
 
 class PantallaDetalles extends StatefulWidget {
-  const PantallaDetalles({super.key});
+  final int? sesionId;
+  const PantallaDetalles({super.key, this.sesionId});
 
   @override
   State<PantallaDetalles> createState() => _PantallaDetallesState();
@@ -19,18 +21,15 @@ class PantallaDetalles extends StatefulWidget {
 
 class _PantallaDetallesState extends State<PantallaDetalles> {
   bool _loading     = true;
-  bool _completando = false; // mientras espera respuesta de completar ejercicio
+  bool _completando = false;
   String? _error;
 
-  // Datos de la sesión activa
   int? _sesionId;
   Map<String, dynamic>? _estadoPlan;
   List<Map<String, dynamic>> _ejercicios = [];
 
-  // Índice del ejercicio que se está mostrando (el actual pendiente)
   int _indexActual = 0;
 
-  // Resultado de finalizar la sesión completa
   Map<String, dynamic>? _resultadoFinal;
 
   @override
@@ -39,12 +38,10 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
     _cargarSesionActiva();
   }
 
-  // ── Headers con token ─────────────────────────────────────────────────────
   Future<Map<String, String>> get _headers async {
-    final token = await AuthService.getValidToken();
+    final token = await AuthService.getToken();
     return {
       'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }
@@ -59,24 +56,15 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
     );
   }
 
-  // ── Carga sesión activa ───────────────────────────────────────────────────
   Future<void> _cargarSesionActiva() async {
-    setState(() {
-      _loading = true;
-      _error   = null;
-    });
+    setState(() { _loading = true; _error = null; });
 
     try {
       final headers = await _headers;
-      if (!headers.containsKey('Authorization')) {
-        await _goToLogin();
-        return;
-      }
+      if (!headers.containsKey('Authorization')) { await _goToLogin(); return; }
 
-      final res = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/sesion/activa/'),
-        headers: headers,
-      );
+      final url = Uri.parse('${ApiConfig.baseUrl}/api/sesion/activa/');
+      final res = await http.get(url, headers: headers);
 
       if (!mounted) return;
       if (res.statusCode == 401) { await _goToLogin(); return; }
@@ -85,37 +73,26 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
 
         if (body['tiene_sesion_activa'] != true) {
+          if (widget.sesionId != null) {
+            await Future.delayed(const Duration(milliseconds: 800));
+            if (!mounted) return;
+            final res2 = await http.get(url, headers: headers);
+            if (!mounted) return;
+            if (res2.statusCode == 200) {
+              final body2 = jsonDecode(res2.body) as Map<String, dynamic>;
+              if (body2['tiene_sesion_activa'] == true) {
+                _procesarSesion(body2);
+                return;
+              }
+            }
+          }
           setState(() {
             _error   = 'No hay una sesión activa en este momento.\nInicia una sesión desde el plan de entrenamiento.';
             _loading = false;
           });
           return;
         }
-
-        final sesion     = Map<String, dynamic>.from(body['sesion'] as Map);
-        final estadoPlan = body['estado_plan'] != null
-            ? Map<String, dynamic>.from(body['estado_plan'] as Map)
-            : null;
-
-        // Convertir lista a List<Map>
-        final rawList = sesion['ejercicios_completados'] as List? ?? [];
-        final ejercicios = rawList
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-
-        // FIX #1: posicionarse en el PRIMER ejercicio con completado == false
-        final pendienteIdx = ejercicios.indexWhere(
-          (e) => e['completado'] != true,
-        );
-        final indexInicial = pendienteIdx >= 0 ? pendienteIdx : ejercicios.length - 1;
-
-        setState(() {
-          _sesionId    = sesion['id'] as int?;
-          _estadoPlan  = estadoPlan;
-          _ejercicios  = ejercicios;
-          _indexActual = indexInicial;
-          _loading     = false;
-        });
+        _procesarSesion(body);
       } else {
         setState(() {
           _error   = 'Error al cargar la sesión (${res.statusCode})';
@@ -132,12 +109,33 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
     }
   }
 
-  // ── Completar el ejercicio actual llamando a la API ───────────────────────
-  // FIX #2 y #3: llama a POST /api/sesion/<sesionId>/ejercicio/<ejercicioSesionId>/completar/
+  void _procesarSesion(Map<String, dynamic> body) {
+    final sesion     = Map<String, dynamic>.from(body['sesion'] as Map);
+    final estadoPlan = body['estado_plan'] != null
+        ? Map<String, dynamic>.from(body['estado_plan'] as Map)
+        : null;
+
+    final rawList    = sesion['ejercicios_completados'] as List? ?? [];
+    final ejercicios = rawList
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+
+    final pendienteIdx = ejercicios.indexWhere((e) => e['completado'] != true);
+    final indexInicial = pendienteIdx >= 0 ? pendienteIdx : ejercicios.length - 1;
+
+    setState(() {
+      _sesionId    = sesion['id'] as int?;
+      _estadoPlan  = estadoPlan;
+      _ejercicios  = ejercicios;
+      _indexActual = indexInicial;
+      _loading     = false;
+    });
+  }
+
   Future<void> _completarEjercicioActual() async {
     if (_sesionId == null || _completando) return;
 
-    final ejercicio = _ejercicios[_indexActual];
+    final ejercicio         = _ejercicios[_indexActual];
     final ejercicioSesionId = ejercicio['id'] as int?;
     if (ejercicioSesionId == null) return;
 
@@ -154,21 +152,18 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
       );
 
       if (!mounted) return;
-
       if (res.statusCode == 401) { await _goToLogin(); return; }
 
       if (res.statusCode == 200 || res.statusCode == 201) {
-        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        final body             = jsonDecode(res.body) as Map<String, dynamic>;
         final sesionCompletada = body['sesion_completada'] == true;
 
         if (sesionCompletada) {
-          // Última sesión completada → pantalla final
           setState(() {
             _resultadoFinal = body;
             _completando    = false;
           });
         } else {
-          // Marcar como completado localmente y avanzar al siguiente
           setState(() {
             _ejercicios[_indexActual] = {
               ..._ejercicios[_indexActual],
@@ -179,18 +174,14 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
           });
         }
       } else {
-        // Error de red: avanzar de todas formas para no bloquear al usuario
         setState(() {
           _ejercicios[_indexActual] = {
             ..._ejercicios[_indexActual],
             'completado': true,
           };
-          if (_indexActual < _ejercicios.length - 1) {
-            _indexActual++;
-          }
+          if (_indexActual < _ejercicios.length - 1) _indexActual++;
           _completando = false;
         });
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Advertencia: no se pudo sincronizar (${res.statusCode})'),
@@ -206,12 +197,9 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
             ..._ejercicios[_indexActual],
             'completado': true,
           };
-          if (_indexActual < _ejercicios.length - 1) {
-            _indexActual++;
-          }
+          if (_indexActual < _ejercicios.length - 1) _indexActual++;
           _completando = false;
         });
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Sin conexión: progreso guardado localmente'),
@@ -223,9 +211,6 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  //  BUILD
-  // ══════════════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -247,7 +232,6 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
     );
   }
 
-  // ── Header rojo ───────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Container(
       color: _kRed,
@@ -285,7 +269,6 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
     );
   }
 
-  // ── Detalle de un ejercicio ───────────────────────────────────────────────
   Widget _buildDetalleEjercicio() {
     if (_ejercicios.isEmpty) {
       return const Center(
@@ -295,11 +278,12 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
     }
 
     final ejercicio  = _ejercicios[_indexActual];
-    final nombre     = ejercicio['nombre']         ?? 'Ejercicio';
-    final grupo      = ejercicio['grupo_muscular']  ?? '';
-    final series     = ejercicio['series']          ?? 0;
-    final reps       = ejercicio['repeticiones']    ?? 0;
-    final descanso   = ejercicio['descanso']        ?? '—';
+    final nombre     = ejercicio['nombre']        ?? 'Ejercicio';
+    final grupo      = ejercicio['grupo_muscular'] ?? '';
+    final series     = ejercicio['series']         ?? 0;
+    final reps       = ejercicio['repeticiones']   ?? 0;
+    final descanso   = ejercicio['descanso']       ?? '—';
+    final imagenUrl  = ejercicio['imagen_url']?.toString() ?? '';
     final completado = ejercicio['completado'] == true;
     final esUltimo   = _indexActual == _ejercicios.length - 1;
 
@@ -310,13 +294,37 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Imagen placeholder grande
+
+              // ── Imagen del ejercicio ──────────────────────────────────
               Container(
                 width: double.infinity,
                 height: 220,
                 color: Colors.grey[900],
-                child: const Icon(Icons.fitness_center_rounded,
-                    color: Colors.white12, size: 80),
+                child: imagenUrl.isNotEmpty && !kIsWeb
+                    ? Image.network(
+                        imagenUrl,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (_, child, progress) {
+                          if (progress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: _kRed,
+                              value: progress.expectedTotalBytes != null
+                                  ? progress.cumulativeBytesLoaded /
+                                      progress.expectedTotalBytes!
+                                  : null,
+                            ),
+                          );
+                        },
+                        errorBuilder: (_, __, ___) => const Center(
+                          child: Icon(Icons.fitness_center_rounded,
+                              color: Colors.white12, size: 80),
+                        ),
+                      )
+                    : const Center(
+                        child: Icon(Icons.fitness_center_rounded,
+                            color: Colors.white12, size: 80),
+                      ),
               ),
 
               Padding(
@@ -366,7 +374,7 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
                     const SizedBox(height: 24),
 
                     const Text(
-                      'Pasos del ejercicio',
+                      'Descripción',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -375,21 +383,8 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
                     ),
                     const SizedBox(height: 12),
 
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: _kRed.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.view_in_ar_rounded,
-                          color: _kRed, size: 20),
-                    ),
-                    const SizedBox(height: 12),
-
                     _buildDescripcion(ejercicio),
 
-                    // Badge de completado
                     if (completado) ...[
                       const SizedBox(height: 16),
                       Container(
@@ -420,7 +415,6 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
                     ],
 
                     const SizedBox(height: 24),
-                    // FIX #4: contar completados reales, no _indexActual
                     _buildProgreso(),
                   ],
                 ),
@@ -437,7 +431,6 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
           child: SizedBox(
             height: 52,
             child: ElevatedButton(
-              // FIX #2: llama a la API real
               onPressed: _completando ? null : _completarEjercicioActual,
               style: ElevatedButton.styleFrom(
                 backgroundColor: _kRed,
@@ -470,19 +463,21 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
     );
   }
 
-  // ── Descripción del ejercicio ─────────────────────────────────────────────
   Widget _buildDescripcion(Map<String, dynamic> ejercicio) {
-    final nombre = ejercicio['nombre']         ?? 'este ejercicio';
-    final grupo  = ejercicio['grupo_muscular']  ?? '';
-    final series = ejercicio['series']          ?? 0;
-    final reps   = ejercicio['repeticiones']    ?? 0;
-    final notas  = ejercicio['notas'];
+    final nombre  = ejercicio['nombre']        ?? 'este ejercicio';
+    final grupo   = ejercicio['grupo_muscular'] ?? '';
+    final series  = ejercicio['series']         ?? 0;
+    final reps    = ejercicio['repeticiones']   ?? 0;
+    final notas   = ejercicio['notas'];
+    final descIa  = ejercicio['descripcion_ia'];
 
-    final texto = (notas != null && notas.toString().isNotEmpty)
-        ? notas.toString()
-        : 'Realiza $nombre trabajando $grupo. '
-          'Completa $series series de $reps repeticiones con buena técnica. '
-          'Mantén el control del movimiento en cada repetición para maximizar el resultado y evitar lesiones.';
+    final texto = (descIa != null && descIa.toString().isNotEmpty)
+        ? descIa.toString()
+        : (notas != null && notas.toString().isNotEmpty)
+            ? notas.toString()
+            : 'Realiza $nombre trabajando $grupo. '
+              'Completa $series series de $reps repeticiones con buena técnica. '
+              'Mantén el control del movimiento en cada repetición para maximizar el resultado y evitar lesiones.';
 
     return Text(
       texto,
@@ -494,7 +489,6 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
     );
   }
 
-  // ── Caja de stat ──────────────────────────────────────────────────────────
   Widget _statBox(IconData icon, String valor, String label) {
     return Expanded(
       child: Container(
@@ -526,11 +520,9 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
     );
   }
 
-  // ── Barra de progreso ─────────────────────────────────────────────────────
   Widget _buildProgreso() {
-    final total  = _ejercicios.length;
-    // FIX #4: contar los realmente marcados como completado
-    final hechos = _ejercicios.where((e) => e['completado'] == true).length;
+    final total    = _ejercicios.length;
+    final hechos   = _ejercicios.where((e) => e['completado'] == true).length;
     final progreso = total > 0 ? hechos / total : 0.0;
 
     return Column(
@@ -563,12 +555,11 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
     );
   }
 
-  // ── Pantalla final ────────────────────────────────────────────────────────
   Widget _buildPantallaFinal() {
-    final mensaje     = _resultadoFinal!['mensaje']               ?? '¡Sesión completada!';
-    final completadas = _resultadoFinal!['sesiones_completadas']  ?? _estadoPlan?['sesiones_completadas'] ?? 0;
-    final totales     = _resultadoFinal!['sesiones_totales']      ?? _estadoPlan?['sesiones_totales']     ?? 0;
-    final planDone    = _resultadoFinal!['plan_completado']       == true;
+    final mensaje     = _resultadoFinal!['mensaje']              ?? '¡Sesión completada!';
+    final completadas = _resultadoFinal!['sesiones_completadas'] ?? _estadoPlan?['sesiones_completadas'] ?? 0;
+    final totales     = _resultadoFinal!['sesiones_totales']     ?? _estadoPlan?['sesiones_totales']     ?? 0;
+    final planDone    = _resultadoFinal!['plan_completado']      == true;
 
     return Center(
       child: Padding(
@@ -621,11 +612,9 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Progreso del plan',
-                          style: TextStyle(
-                              color: Colors.white54, fontSize: 12)),
+                          style: TextStyle(color: Colors.white54, fontSize: 12)),
                       Text('$completadas / $totales sesiones',
-                          style: const TextStyle(
-                              color: Colors.white54, fontSize: 12)),
+                          style: const TextStyle(color: Colors.white54, fontSize: 12)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -671,7 +660,6 @@ class _PantallaDetallesState extends State<PantallaDetalles> {
     );
   }
 
-  // ── Error ─────────────────────────────────────────────────────────────────
   Widget _buildError() {
     return Center(
       child: Padding(

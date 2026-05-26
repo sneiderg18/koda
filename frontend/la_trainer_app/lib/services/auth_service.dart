@@ -4,13 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/api_config.dart';
 
 class AuthService {
-  static const _keyAccess     = 'access_token';
-  static const _keyRefresh    = 'refresh_token';
-  static const _keyUsername   = 'username';
+  static const _keyAccess = 'access_token';
+  static const _keyRefresh = 'refresh_token';
+  static const _keyUsername = 'username';
   static const _keyOnboarding = 'onboarding_done';
 
   // ── Headers ───────────────────────────────────────────────
-  // Header ngrok eliminado — ya no aplica con Railway
   static Map<String, String> get _baseHeaders => {
     'Content-Type': 'application/json',
   };
@@ -47,31 +46,55 @@ class AuthService {
     return prefs.getString(_keyAccess);
   }
 
-  // ── TOKEN VÁLIDO (refresca automáticamente si expiró) ─────
+  // ── TOKEN VÁLIDO (valida localmente el JWT, refresca si expiró) ──────────
+  // FIX: antes hacía una petición HTTP al /api/perfil/ solo para verificar
+  // el token, lo que era lento e innecesario. Ahora decodifica el JWT
+  // localmente (sin verificar firma, solo el exp) para ver si expiró.
   static Future<String?> getValidToken() async {
     final prefs = await SharedPreferences.getInstance();
-    final access  = prefs.getString(_keyAccess);
+    final access = prefs.getString(_keyAccess);
     final refresh = prefs.getString(_keyRefresh);
 
     if (access == null) return null;
 
-    try {
-      final testRes = await http
-          .get(
-            Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
-            headers: _authHeaders(access),
-          )
-          .timeout(const Duration(seconds: 6));
+    if (!_isTokenExpired(access)) return access;
 
-      if (testRes.statusCode == 200) return access;
-      if (testRes.statusCode == 401 && refresh != null) {
-        return await _refreshToken(refresh);
-      }
-    } catch (_) {
-      return access;
+    // Expiró → intentar refrescar
+    if (refresh != null) {
+      return await _refreshToken(refresh);
     }
 
     return null;
+  }
+
+  /// Decodifica el payload del JWT y comprueba si ya expiró.
+  /// No verifica la firma (eso lo hace el servidor), solo el campo `exp`.
+  static bool _isTokenExpired(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length != 3) return true;
+
+      // Base64url → Base64 estándar
+      String payload = parts[1];
+      payload = payload.replaceAll('-', '+').replaceAll('_', '/');
+      // Padding
+      while (payload.length % 4 != 0) {
+        payload += '=';
+      }
+
+      final decoded = utf8.decode(base64Decode(payload));
+      final map = jsonDecode(decoded) as Map<String, dynamic>;
+      final exp = map['exp'] as int?;
+      if (exp == null) return false;
+
+      final expDate = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
+      // Considera expirado 30 s antes para evitar race conditions
+      return DateTime.now().isAfter(
+        expDate.subtract(const Duration(seconds: 30)),
+      );
+    } catch (_) {
+      return true; // Si no se puede parsear, asumir expirado
+    }
   }
 
   // ── REFRESCAR TOKEN ───────────────────────────────────────
@@ -86,8 +109,8 @@ class AuthService {
           .timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
-        final data       = jsonDecode(res.body);
-        final newAccess  = data['access']  as String?;
+        final data = jsonDecode(res.body);
+        final newAccess = data['access'] as String?;
         final newRefresh = data['refresh'] as String?;
         if (newAccess != null) {
           final prefs = await SharedPreferences.getInstance();
@@ -116,10 +139,12 @@ class AuthService {
       final token = prefs.getString(_keyAccess);
       if (token == null) return false;
 
-      final res = await http.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
-        headers: _authHeaders(token),
-      );
+      final res = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
+            headers: _authHeaders(token),
+          )
+          .timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -142,31 +167,64 @@ class AuthService {
   }
 
   // ── LOGIN ─────────────────────────────────────────────────
+  // FIX: envuelto en try/catch con timeout para evitar que el spinner
+  // quede girando infinitamente si no hay red o el servidor no responde.
   static Future<Map<String, dynamic>> login({
     required String email,
     required String password,
   }) async {
-    final response = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/api/login/'),
-      headers: _baseHeaders,
-      body: jsonEncode({'email': email, 'password': password}),
-    );
+    http.Response response;
 
-    final data = jsonDecode(response.body);
+    try {
+      response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/login/'),
+            headers: _baseHeaders,
+            body: jsonEncode({'email': email, 'password': password}),
+          )
+          .timeout(const Duration(seconds: 12));
+    } catch (e) {
+      // Sin conexión, timeout o error de red
+      return {
+        'success': false,
+        'message': 'No se pudo conectar con el servidor. Verifica tu conexión.',
+      };
+    }
+
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(response.body);
+    } catch (_) {
+      return {
+        'success': false,
+        'message': 'Respuesta inesperada del servidor.',
+      };
+    }
 
     if (response.statusCode == 200) {
-      final accessToken  = data['access']  ?? '';
+      final accessToken = data['access'] as String? ?? '';
       final refreshToken = data['refresh'] as String?;
+
+      if (accessToken.isEmpty) {
+        return {
+          'success': false,
+          'message': 'El servidor no devolvió un token.',
+        };
+      }
+
       await saveTokens(access: accessToken, refresh: refreshToken);
 
       bool onboardingDone = false;
       try {
-        final perfilRes = await http.get(
-          Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
-          headers: _authHeaders(accessToken),
-        );
+        final perfilRes = await http
+            .get(
+              Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
+              headers: _authHeaders(accessToken),
+            )
+            .timeout(const Duration(seconds: 8));
+
         if (perfilRes.statusCode == 200) {
-          final perfil   = jsonDecode(perfilRes.body);
+          final perfil = jsonDecode(perfilRes.body);
           final username = perfil['username'] ?? perfil['user']?['username'];
           if (username != null && username.toString().isNotEmpty) {
             await saveUsername(username.toString());
@@ -179,21 +237,18 @@ class AuthService {
           await saveUsername(email.split('@').first);
         }
       } catch (_) {
+        // Si falla la consulta del perfil, no bloqueamos el login
         await saveUsername(email.split('@').first);
       }
 
-      return {
-        'success': true,
-        'data': data,
-        'onboarding_done': onboardingDone,
-      };
+      return {'success': true, 'data': data, 'onboarding_done': onboardingDone};
     } else {
       final mensaje =
           data['detail'] ??
           data['message'] ??
           data['error'] ??
           'Credenciales inválidas';
-      return {'success': false, 'message': mensaje};
+      return {'success': false, 'message': mensaje.toString()};
     }
   }
 
@@ -204,24 +259,44 @@ class AuthService {
     required String password1,
     required String password2,
   }) async {
-    final response = await http.post(
-      Uri.parse('${ApiConfig.baseUrl}/api/registro/'),
-      headers: _baseHeaders,
-      body: jsonEncode({
-        'email':     email,
-        'username':  username,
-        'password1': password1,
-        'password2': password2,
-      }),
-    );
+    http.Response response;
 
-    final data = jsonDecode(response.body);
+    try {
+      response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/registro/'),
+            headers: _baseHeaders,
+            body: jsonEncode({
+              'email': email,
+              'username': username,
+              'password1': password1,
+              'password2': password2,
+              'acepto_terminos': true, // ← agregar esto
+            }),
+          )
+          .timeout(const Duration(seconds: 12));
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'No se pudo conectar con el servidor. Verifica tu conexión.',
+      };
+    }
+
+    Map<String, dynamic> data;
+    try {
+      data = jsonDecode(response.body);
+    } catch (_) {
+      return {
+        'success': false,
+        'message': 'Respuesta inesperada del servidor.',
+      };
+    }
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       if (data['access'] != null) {
         await saveTokens(
-          access:  data['access']  ?? '',
-          refresh: data['refresh'],
+          access: data['access'] as String? ?? '',
+          refresh: data['refresh'] as String?,
         );
       }
       await saveUsername(username);
@@ -246,14 +321,18 @@ class AuthService {
   // ── OBTENER PERFIL ────────────────────────────────────────
   static Future<Map<String, dynamic>> getPerfil() async {
     final token = await getToken();
-    final response = await http.get(
-      Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
-      headers: _authHeaders(token ?? ''),
-    );
+    try {
+      final response = await http
+          .get(
+            Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
+            headers: _authHeaders(token ?? ''),
+          )
+          .timeout(const Duration(seconds: 8));
 
-    if (response.statusCode == 200) {
-      return {'success': true, 'data': jsonDecode(response.body)};
-    }
+      if (response.statusCode == 200) {
+        return {'success': true, 'data': jsonDecode(response.body)};
+      }
+    } catch (_) {}
     return {'success': false, 'message': 'No se pudo obtener el perfil'};
   }
 

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
+import '../services/auth_service.dart';
 
 class NutritionPlanScreen extends StatefulWidget {
   const NutritionPlanScreen({super.key});
@@ -11,11 +13,12 @@ class NutritionPlanScreen extends StatefulWidget {
 }
 
 class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _nombreController = TextEditingController();
-  final _caloriasController = TextEditingController();
-  final _proteinasController = TextEditingController();
-  final _grasasController = TextEditingController();
+  final _formKey                = GlobalKey<FormState>();
+  final _nombreController       = TextEditingController();
+  final _caloriasController     = TextEditingController();
+  final _proteinasController    = TextEditingController();
+  final _carbohidratosController = TextEditingController();
+  final _grasasController       = TextEditingController();
   bool _isLoading = false;
 
   @override
@@ -23,6 +26,7 @@ class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
     _nombreController.dispose();
     _caloriasController.dispose();
     _proteinasController.dispose();
+    _carbohidratosController.dispose();
     _grasasController.dispose();
     super.dispose();
   }
@@ -33,20 +37,24 @@ class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await http.post(
-        Uri.parse(
-            'https://josue-noncoincident-interferometrically.ngrok-free.dev/api/comidas/'),
-        headers: {
-          'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: jsonEncode({
-          'nombre': _nombreController.text.trim(),
-          'calorias': int.parse(_caloriasController.text.trim()),
-          'proteinas': double.parse(_proteinasController.text.trim()),
-          'grasas': double.parse(_grasasController.text.trim()),
-        }),
-      );
+      final token = await AuthService.getToken();
+
+      final response = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/comidas/'),
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'nombre':         _nombreController.text.trim(),
+              'calorias':       int.parse(_caloriasController.text.trim()),
+              'proteinas':      double.parse(_proteinasController.text.trim()),
+              'carbohidratos':  double.parse(_carbohidratosController.text.trim()),
+              'grasas':         double.parse(_grasasController.text.trim()),
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
 
@@ -54,6 +62,7 @@ class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
         _nombreController.clear();
         _caloriasController.clear();
         _proteinasController.clear();
+        _carbohidratosController.clear();
         _grasasController.clear();
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -67,16 +76,24 @@ class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
             ),
             backgroundColor: const Color(0xFF43C6AC),
             behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             margin: const EdgeInsets.all(16),
           ),
         );
       } else {
-        _mostrarError('Error al guardar. Código: ${response.statusCode}');
+        String errorMsg = 'Error ${response.statusCode}';
+        try {
+          final data = jsonDecode(response.body);
+          if (data is Map) {
+            errorMsg = data.entries.map((e) => '${e.key}: ${e.value}').join('\n');
+          }
+        } catch (_) {
+          errorMsg = response.body;
+        }
+        _mostrarError(errorMsg);
       }
     } catch (e) {
-      _mostrarError('No se pudo conectar con el servidor.');
+      if (mounted) _mostrarError('No se pudo conectar con el servidor.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -87,16 +104,14 @@ class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
       SnackBar(
         content: Row(
           children: [
-            const Icon(Icons.error_outline_rounded,
-                color: Colors.white, size: 20),
+            const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
             const SizedBox(width: 10),
             Expanded(child: Text(mensaje)),
           ],
         ),
         backgroundColor: Colors.redAccent,
         behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
       ),
     );
@@ -111,8 +126,7 @@ class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: Color(0xFF1A1A2E)),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF1A1A2E)),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
@@ -161,12 +175,8 @@ class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
                   icon: Icons.restaurant_menu_rounded,
                   color: const Color(0xFF43C6AC),
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'El nombre es obligatorio';
-                  }
-                  return null;
-                },
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'El nombre es obligatorio' : null,
               ),
               const SizedBox(height: 20),
 
@@ -182,16 +192,12 @@ class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
                   icon: Icons.local_fire_department_rounded,
                   color: const Color(0xFFFF6B6B),
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Las calorías son obligatorias';
-                  }
-                  return null;
-                },
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Las calorías son obligatorias' : null,
               ),
               const SizedBox(height: 20),
 
-              // Fila: Proteínas y Grasas
+              // Proteínas y Carbohidratos
               Row(
                 children: [
                   Expanded(
@@ -202,23 +208,17 @@ class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
                         const SizedBox(height: 8),
                         TextFormField(
                           controller: _proteinasController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                                RegExp(r'^\d+\.?\d{0,2}')),
+                            FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
                           ],
                           decoration: _inputDecoration(
                             hint: 'Ej. 31.0',
                             icon: Icons.egg_rounded,
                             color: const Color(0xFF4F6EF7),
                           ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Obligatorio';
-                            }
-                            return null;
-                          },
+                          validator: (v) =>
+                              (v == null || v.trim().isEmpty) ? 'Obligatorio' : null,
                         ),
                       ],
                     ),
@@ -228,36 +228,49 @@ class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildLabel('Grasas (g)'),
+                        _buildLabel('Carbohidratos (g)'),
                         const SizedBox(height: 8),
                         TextFormField(
-                          controller: _grasasController,
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
+                          controller: _carbohidratosController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
                           inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                                RegExp(r'^\d+\.?\d{0,2}')),
+                            FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
                           ],
                           decoration: _inputDecoration(
-                            hint: 'Ej. 3.6',
-                            icon: Icons.opacity_rounded,
+                            hint: 'Ej. 0.0',
+                            icon: Icons.grain_rounded,
                             color: const Color(0xFFFF9800),
                           ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Obligatorio';
-                            }
-                            return null;
-                          },
+                          validator: (v) =>
+                              (v == null || v.trim().isEmpty) ? 'Obligatorio' : null,
                         ),
                       ],
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 20),
+
+              // Grasas
+              _buildLabel('Grasas (g)'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _grasasController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                ],
+                decoration: _inputDecoration(
+                  hint: 'Ej. 3.6',
+                  icon: Icons.opacity_rounded,
+                  color: const Color(0xFF9C27B0),
+                ),
+                validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? 'Obligatorio' : null,
+              ),
               const SizedBox(height: 36),
 
-              // Botón enviar
+              // Botón guardar
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -265,27 +278,20 @@ class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
                   onPressed: _isLoading ? null : _enviarFormulario,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF43C6AC),
-                    disabledBackgroundColor:
-                        const Color(0xFF43C6AC).withOpacity(0.6),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                    disabledBackgroundColor: const Color(0xFF43C6AC).withOpacity(0.6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     elevation: 0,
                   ),
                   child: _isLoading
                       ? const SizedBox(
                           width: 22,
                           height: 22,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2.5,
-                          ),
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
                         )
                       : const Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.save_rounded,
-                                color: Colors.white, size: 20),
+                            Icon(Icons.save_rounded, color: Colors.white, size: 20),
                             SizedBox(width: 10),
                             Text(
                               'Guardar Comida',
@@ -328,8 +334,7 @@ class _NutritionPlanScreenState extends State<NutritionPlanScreen> {
       prefixIcon: Icon(icon, color: color, size: 20),
       filled: true,
       fillColor: Colors.white,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFFEEEEEE)),

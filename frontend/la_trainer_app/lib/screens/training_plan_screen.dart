@@ -21,10 +21,14 @@ class TrainingPlanScreen extends StatefulWidget {
 class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
   bool _loading   = true;
   bool _generando = false;
+  bool _iniciando = false;
   String? _error;
 
   Map<String, dynamic>? _plan;
-  List<dynamic> _ejercicios = [];
+  List<dynamic> _ejercicios     = [];
+  bool _yaEntrenoHoy            = false;
+  int  _sesionesCompletadas     = 0;
+  int  _sesionesTotales         = 0;
 
   @override
   void initState() {
@@ -45,12 +49,11 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
   Future<void> _loadPlan() async {
     setState(() { _loading = true; _error = null; });
     try {
-      final token = await AuthService.getValidToken();
+      final token = await AuthService.getToken();
       if (token == null) { await _goToLogin(); return; }
 
       final headers = {
         'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
         'Authorization': 'Bearer $token',
       };
 
@@ -78,9 +81,12 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
         final rutina = plan['rutina_ejercicios'];
 
         setState(() {
-          _plan       = plan;
-          _ejercicios = rutina is List ? List<dynamic>.from(rutina) : [];
-          _loading    = false;
+          _plan                 = plan;
+          _ejercicios           = rutina is List ? List<dynamic>.from(rutina) : [];
+          _sesionesCompletadas  = body['sesiones_completadas'] ?? 0;
+          _sesionesTotales      = body['sesiones_totales']     ?? 0;
+          _yaEntrenoHoy         = false; // se actualiza al intentar iniciar
+          _loading              = false;
         });
       } else {
         setState(() {
@@ -101,12 +107,11 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
   Future<void> _generarPlan() async {
     setState(() => _generando = true);
     try {
-      final token = await AuthService.getValidToken();
+      final token = await AuthService.getToken();
       if (token == null) { await _goToLogin(); return; }
 
       final headers = {
         'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
         'Authorization': 'Bearer $token',
       };
 
@@ -118,6 +123,9 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       if (!mounted) return;
 
       if (res.statusCode == 201 || res.statusCode == 200) {
+        await _loadPlan();
+      } else if (res.statusCode == 500) {
+        await Future.delayed(const Duration(milliseconds: 1000));
         await _loadPlan();
       } else {
         final body = jsonDecode(res.body);
@@ -132,13 +140,15 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
   }
 
   Future<void> _iniciarSesion() async {
+    if (_iniciando) return;
+    setState(() => _iniciando = true);
+
     try {
-      final token = await AuthService.getValidToken();
+      final token = await AuthService.getToken();
       if (token == null) { await _goToLogin(); return; }
 
       final headers = {
         'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': 'true',
         'Authorization': 'Bearer $token',
       };
 
@@ -150,21 +160,50 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       if (!mounted) return;
       if (res.statusCode == 401) { await _goToLogin(); return; }
 
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+
+      // ── El backend dice que ya entrenó hoy ──────────────────────────────
+      if (body['puede_entrenar_hoy'] == false ||
+          body['sesion_completada_hoy'] == true) {
+        setState(() {
+          _yaEntrenoHoy        = true;
+          _sesionesCompletadas = body['sesiones_completadas'] ?? _sesionesCompletadas;
+          _sesionesTotales     = body['sesiones_totales']     ?? _sesionesTotales;
+          _iniciando           = false;
+        });
+        return;
+      }
+
       if (res.statusCode == 200 || res.statusCode == 201) {
-        Navigator.push(
+        final sesionId = body['id'] as int?
+            ?? body['sesion_id'] as int?
+            ?? (body['sesion'] as Map<String, dynamic>?)?['id'] as int?;
+
+        setState(() => _iniciando = false);
+
+        await Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const PantallaDetalles()),
+          MaterialPageRoute(
+            builder: (_) => PantallaDetalles(sesionId: sesionId),
+          ),
         );
+
+        // Al regresar recargamos el plan
+        await _loadPlan();
+
       } else {
-        final body = jsonDecode(res.body);
+        setState(() => _iniciando = false);
+        final msg = body['error'] ?? body['detail'] ?? body['mensaje'] ?? 'Error ${res.statusCode}';
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(body['error'] ?? 'No se pudo iniciar la sesión'),
+          content: Text(msg.toString()),
           backgroundColor: Colors.redAccent,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 6),
         ));
       }
     } catch (e) {
       if (mounted) {
+        setState(() => _iniciando = false);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('No se pudo conectar con el servidor'),
           backgroundColor: Colors.redAccent,
@@ -199,7 +238,9 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
               bottom: 24,
               left: 24,
               right: 24,
-              child: _buildStartSessionButton(),
+              child: _yaEntrenoHoy
+                  ? _buildYaEntrenoHoyBanner()
+                  : _buildStartSessionButton(),
             ),
         ],
       ),
@@ -210,7 +251,6 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
   Widget _buildHeader() {
     return Column(
       children: [
-        // Banner rojo
         Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -246,7 +286,6 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
             ),
           ),
         ),
-        // ✅ Botón HOME fuera del banner, sobre fondo oscuro, centrado
         Container(
           color: _kBg,
           width: double.infinity,
@@ -262,7 +301,6 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
-  // ✅ Botón HOME con color F25050
   Widget _buildHomeButton() {
     return GestureDetector(
       onTap: () => Navigator.pop(context),
@@ -300,7 +338,98 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
-  // ✅ Botón EMPEZAR SESIÓN con semitransparencia y brillo
+  // ── Banner: ya entrenó hoy ────────────────────────────────────────────────
+  Widget _buildYaEntrenoHoyBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1C),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.green.withOpacity(0.4)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.green.withOpacity(0.15),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check_circle_rounded,
+                    color: Colors.green, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '¡Sesión completada hoy!',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Vuelve mañana para continuar 💪',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Barra de progreso del plan
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Progreso del plan',
+                style: TextStyle(
+                    color: Colors.white.withOpacity(0.5), fontSize: 11),
+              ),
+              Text(
+                '$_sesionesCompletadas / $_sesionesTotales sesiones',
+                style: TextStyle(
+                    color: Colors.white.withOpacity(0.5), fontSize: 11),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _sesionesTotales > 0
+                  ? _sesionesCompletadas / _sesionesTotales
+                  : 0,
+              backgroundColor: Colors.white12,
+              color: Colors.green,
+              minHeight: 6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Botón empezar sesión ──────────────────────────────────────────────────
   Widget _buildStartSessionButton() {
     return Container(
       height: 56,
@@ -321,9 +450,10 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
         ],
       ),
       child: ElevatedButton(
-        onPressed: _iniciarSesion,
+        onPressed: _iniciando ? null : _iniciarSesion,
         style: ElevatedButton.styleFrom(
           backgroundColor: _kRed.withOpacity(0.85),
+          disabledBackgroundColor: _kRed.withOpacity(0.4),
           shadowColor: Colors.transparent,
           elevation: 0,
           shape: RoundedRectangleBorder(
@@ -332,22 +462,29 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
                 color: Colors.white.withOpacity(0.25), width: 1.2),
           ),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.play_arrow_rounded,
-                color: Colors.white, size: 22),
-            const SizedBox(width: 8),
-            Text(
-              'EMPEZAR SESIÓN',
-              style: GoogleFonts.bebasNeue(
-                fontSize: 20,
-                color: Colors.white,
-                letterSpacing: 2,
+        child: _iniciando
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2.5),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.play_arrow_rounded,
+                      color: Colors.white, size: 22),
+                  const SizedBox(width: 8),
+                  Text(
+                    'EMPEZAR SESIÓN',
+                    style: GoogleFonts.bebasNeue(
+                      fontSize: 20,
+                      color: Colors.white,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -364,6 +501,8 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
         children: [
+          // Progreso del plan
+          
           Row(
             children: [
               Container(
@@ -416,6 +555,54 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
           const SizedBox(height: 16),
           ..._ejercicios.asMap().entries.map(
             (e) => _buildEjercicioTile(e.value, e.key),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Progreso del plan ─────────────────────────────────────────────────────
+  Widget _buildProgresoPlam() {
+    final porcentaje = _sesionesTotales > 0
+        ? _sesionesCompletadas / _sesionesTotales
+        : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _kCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.04)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Progreso del plan',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                '$_sesionesCompletadas / $_sesionesTotales sesiones',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: porcentaje,
+              backgroundColor: Colors.white12,
+              color: _kRed,
+              minHeight: 6,
+            ),
           ),
         ],
       ),

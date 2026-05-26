@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
-import 'onboarding_screen.dart';  // ← NUEVO
+import 'onboarding_screen.dart';
 
 // ── Constantes ─────────────────────────────────────────────────────────────────
 const _kRed1       = Color(0xFFD72105);
@@ -13,6 +13,53 @@ const _kBgBot      = Color(0xFF0F0F1E);
 const double _kImageHeight  = 160;
 const double _kImageOverlap = 50;
 
+// ── Contenido de los términos ──────────────────────────────────────────────────
+const _terminosSecciones = [
+  _TerminoSeccion(
+    icon: Icons.person_outline_rounded,
+    titulo: '1. Datos que recopilamos',
+    texto:
+        'Recopilamos tu nombre, correo, edad, peso, altura y datos de actividad física para personalizar tu experiencia en KODA.',
+  ),
+  _TerminoSeccion(
+    icon: Icons.fitness_center_rounded,
+    titulo: '2. Uso de tu información',
+    texto:
+        'Tus datos se usan exclusivamente para generar planes de entrenamiento y alimentación personalizados con IA. No los vendemos ni compartimos con terceros.',
+  ),
+  _TerminoSeccion(
+    icon: Icons.health_and_safety_outlined,
+    titulo: '3. Responsabilidad médica',
+    texto:
+        'KODA no reemplaza la asesoría médica profesional. Consulta a un especialista antes de iniciar cualquier rutina de ejercicio o cambio de dieta.',
+  ),
+  _TerminoSeccion(
+    icon: Icons.lock_outline_rounded,
+    titulo: '4. Seguridad',
+    texto:
+        'Tu información está protegida con cifrado JWT y almacenamiento seguro. Solo tú tienes acceso a tu perfil y datos personales.',
+  ),
+  _TerminoSeccion(
+    icon: Icons.delete_outline_rounded,
+    titulo: '5. Eliminación de cuenta',
+    texto:
+        'Puedes solicitar la eliminación de tu cuenta y todos tus datos en cualquier momento desde la sección de perfil.',
+  ),
+  _TerminoSeccion(
+    icon: Icons.update_rounded,
+    titulo: '6. Cambios en los términos',
+    texto:
+        'Podemos actualizar estos términos ocasionalmente. Te notificaremos dentro de la app si hay cambios importantes.',
+  ),
+];
+
+class _TerminoSeccion {
+  final IconData icon;
+  final String titulo;
+  final String texto;
+  const _TerminoSeccion({required this.icon, required this.titulo, required this.texto});
+}
+
 class RegistroScreen extends StatefulWidget {
   const RegistroScreen({super.key});
   @override
@@ -20,16 +67,17 @@ class RegistroScreen extends StatefulWidget {
 }
 
 class _RegistroScreenState extends State<RegistroScreen> {
-  final _formKey     = GlobalKey<FormState>();
-  final _emailCtrl   = TextEditingController();
-  final _userCtrl    = TextEditingController();
-  final _pass1Ctrl   = TextEditingController();
-  final _pass2Ctrl   = TextEditingController();
+  final _formKey   = GlobalKey<FormState>();
+  final _emailCtrl = TextEditingController();
+  final _userCtrl  = TextEditingController();
+  final _pass1Ctrl = TextEditingController();
+  final _pass2Ctrl = TextEditingController();
 
-  bool _obscurePass1        = true;
-  bool _obscurePass2        = true;
-  bool _loading             = false;
-  bool _showPassReqs        = false;
+  bool _obscurePass1   = true;
+  bool _obscurePass2   = true;
+  bool _loading        = false;
+  bool _showPassReqs   = false;
+  bool _aceptoTerminos = false; // ← NUEVO
 
   // ── Validaciones de contraseña ────────────────────────────────────────────────
   bool get _hasMinLength => _pass1Ctrl.text.length >= 8;
@@ -52,9 +100,31 @@ class _RegistroScreenState extends State<RegistroScreen> {
     super.dispose();
   }
 
-  // ── LÓGICA DE REGISTRO CON REDIRECCIÓN A ONBOARDING ──────────────────────────
+  // ── Modal de términos estilo chat ─────────────────────────────────────────────
+  void _mostrarTerminos() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _TerminosModal(),
+    );
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────────────────
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (!_aceptoTerminos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debes aceptar los términos y condiciones para continuar.'),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     setState(() => _loading = true);
 
     final result = await AuthService.registro(
@@ -75,7 +145,6 @@ class _RegistroScreenState extends State<RegistroScreen> {
         ),
       );
 
-      // ── VERIFICAR si peso == null → ir a onboarding ─────────────────────────
       final data = result['data'];
       final peso = data?['peso'] ?? data?['user']?['peso'];
 
@@ -100,7 +169,6 @@ class _RegistroScreenState extends State<RegistroScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // Fondo
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -111,7 +179,6 @@ class _RegistroScreenState extends State<RegistroScreen> {
             ),
           ),
           const Positioned.fill(child: CustomPaint(painter: _SportsBgPainter())),
-          // Contenido
           SafeArea(
             child: Center(
               child: SingleChildScrollView(
@@ -198,13 +265,89 @@ class _RegistroScreenState extends State<RegistroScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 14),
+
+              // ── NUEVO: Checkbox de términos ────────────────────────────────
+              _buildTerminosCheckbox(),
+
+              const SizedBox(height: 14),
               _buildSubmitButton(),
               const SizedBox(height: 10),
               _buildLoginLink(),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ── Checkbox términos ─────────────────────────────────────────────────────────
+  Widget _buildTerminosCheckbox() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _aceptoTerminos
+              ? Colors.white.withOpacity(0.5)
+              : Colors.white.withOpacity(0.2),
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Row(
+        children: [
+          // Checkbox personalizado
+          GestureDetector(
+            onTap: () => setState(() => _aceptoTerminos = !_aceptoTerminos),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                color: _aceptoTerminos ? Colors.white : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.white, width: 2),
+              ),
+              child: _aceptoTerminos
+                  ? const Icon(Icons.check_rounded, color: _kRed1, size: 14)
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _aceptoTerminos = !_aceptoTerminos),
+              child: RichText(
+                text: TextSpan(
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12.5,
+                  ),
+                  children: [
+                    const TextSpan(text: 'Acepto los '),
+                    WidgetSpan(
+                      alignment: PlaceholderAlignment.middle,
+                      child: GestureDetector(
+                        onTap: _mostrarTerminos, // abre el modal
+                        child: const Text(
+                          'Términos y Condiciones',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                            decoration: TextDecoration.underline,
+                            decorationColor: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const TextSpan(text: ' de KODA'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -404,6 +547,313 @@ class _RegistroScreenState extends State<RegistroScreen> {
                     ],
                   ),
                 ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  Modal de Términos estilo chat
+// ══════════════════════════════════════════════════════════════════════════════
+class _TerminosModal extends StatefulWidget {
+  const _TerminosModal();
+
+  @override
+  State<_TerminosModal> createState() => _TerminosModalState();
+}
+
+class _TerminosModalState extends State<_TerminosModal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _slideAnim;
+
+  // Cuántas secciones ya se muestran (simula que van "llegando" como mensajes)
+  int _visibles = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
+    _slideAnim = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
+    _ctrl.forward();
+
+    // Mostrar secciones una por una con delay
+    _mostrarSeccionesProgresivamente();
+  }
+
+  Future<void> _mostrarSeccionesProgresivamente() async {
+    for (int i = 0; i < _terminosSecciones.length; i++) {
+      await Future.delayed(Duration(milliseconds: 200 + i * 300));
+      if (!mounted) return;
+      setState(() => _visibles = i + 1);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0, 1),
+        end: Offset.zero,
+      ).animate(_slideAnim),
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.82,
+        decoration: const BoxDecoration(
+          color: Color(0xFF0D0D0D),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            // ── Handle + título ───────────────────────────────────────────
+            Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF1C1C1C),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: _kRed1.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.gavel_rounded,
+                            color: _kRed1, size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'KODA',
+                            style: GoogleFonts.bebasNeue(
+                              color: Colors.white,
+                              fontSize: 18,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          const Text(
+                            'Términos y Condiciones',
+                            style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded,
+                            color: Colors.white38, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Lista de secciones estilo burbuja de chat ─────────────────
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+                children: [
+                  // Mensaje inicial de KODA
+                  _buildBurbujaKoda(
+                    '¡Hola! Antes de crear tu cuenta, te explicamos brevemente cómo funciona KODA y cómo cuidamos tu información. 💪',
+                    delay: 0,
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Secciones que aparecen progresivamente
+                  for (int i = 0; i < _terminosSecciones.length; i++)
+                    if (i < _visibles)
+                      _buildSeccionBurbuja(_terminosSecciones[i], i),
+
+                  // Mensaje final cuando ya están todas
+                  if (_visibles >= _terminosSecciones.length) ...[
+                    const SizedBox(height: 8),
+                    _buildBurbujaKoda(
+                      'Al registrarte, confirmas que leíste y aceptas estos términos. ¡Bienvenido a KODA! 🔥',
+                      delay: 0,
+                    ),
+                    const SizedBox(height: 16),
+                    // Botón cerrar
+                    Center(
+                      child: SizedBox(
+                        width: 200,
+                        height: 44,
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _kRed1,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                            elevation: 0,
+                          ),
+                          child: Text(
+                            'ENTENDIDO',
+                            style: GoogleFonts.bebasNeue(
+                              color: Colors.white,
+                              fontSize: 17,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBurbujaKoda(String texto, {required int delay}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: _kRed1,
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              'K',
+              style: GoogleFonts.bebasNeue(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1C1C1C),
+              borderRadius: const BorderRadius.only(
+                topRight: Radius.circular(16),
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+              border: Border.all(color: Colors.white.withOpacity(0.06)),
+            ),
+            child: Text(
+              texto,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSeccionBurbuja(_TerminoSeccion seccion, int index) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: _kRed1,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                'K',
+                style: GoogleFonts.bebasNeue(
+                  color: Colors.white,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1C1C1C),
+                borderRadius: const BorderRadius.only(
+                  topRight: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+                border: Border.all(color: Colors.white.withOpacity(0.06)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(seccion.icon, color: _kRed1, size: 15),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          seccion.titulo,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    seccion.texto,
+                    style: const TextStyle(
+                      color: Colors.white60,
+                      fontSize: 12,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

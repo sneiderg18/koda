@@ -257,7 +257,6 @@ class _CoachChatModalState extends State<_CoachChatModal> {
         Uri.parse('${ApiConfig.baseUrl}/api/ia/historial/'),
         headers: {
           'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
           'Authorization': 'Bearer $token',
         },
       );
@@ -356,7 +355,6 @@ class _CoachChatModalState extends State<_CoachChatModal> {
         Uri.parse('${ApiConfig.baseUrl}/api/ia/coach/'),
         headers: {
           'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
           'Authorization': 'Bearer $token',
         },
         body: jsonEncode({'mensaje': text}),
