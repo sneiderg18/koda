@@ -32,7 +32,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final token = await AuthService.getToken();
     return {
       'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
       'Authorization': 'Bearer $token',
     };
   }
