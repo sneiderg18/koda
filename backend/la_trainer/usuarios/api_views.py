@@ -789,36 +789,11 @@ class IniciarSesionAPIView(APIView):
             plan=plan,
         )
 
-        # ── Rotación de ejercicios por grupo muscular ──────────
-        # En lugar de repetir siempre los mismos ejercicios,
-        # agrupamos por músculo y en cada sesión rotamos el grupo.
-        # Ejemplo: sesión 1 → pecho/tríceps, sesión 2 → espalda/bíceps, etc.
+        # ── Selección de ejercicios por sesión ────────────────
+        # Todos los ejercicios del plan se muestran en la sesión.
+        # La IA ya generó el plan con los ejercicios correctos para el usuario.
         todos_ejercicios = list(plan.rutina_ejercicios.all())
-
-        # Agrupar ejercicios por grupo muscular
-        grupos = {}
-        for ej in todos_ejercicios:
-            grupo = ej.grupo_muscular.lower()
-            if grupo not in grupos:
-                grupos[grupo] = []
-            grupos[grupo].append(ej)
-
-        nombres_grupos = list(grupos.keys())
-
-        if len(nombres_grupos) > 1:
-            # Rotar: según el número de sesión decidimos qué grupos trabajar hoy
-            # Si hay 4 grupos y es sesión 3 → índice 2 → tercer grupo
-            indice = (plan.sesiones_completadas) % len(nombres_grupos)
-            grupo_hoy = nombres_grupos[indice]
-            ejercicios_hoy = grupos[grupo_hoy]
-
-            # Si el grupo tiene pocos ejercicios, añadir el siguiente grupo también
-            if len(ejercicios_hoy) < 3 and len(nombres_grupos) > 1:
-                indice_siguiente = (indice + 1) % len(nombres_grupos)
-                ejercicios_hoy = ejercicios_hoy + grupos[nombres_grupos[indice_siguiente]]
-        else:
-            # Solo hay un grupo muscular — usar todos
-            ejercicios_hoy = todos_ejercicios
+        ejercicios_hoy = todos_ejercicios
 
         for ejercicio in ejercicios_hoy:
             EjercicioSesion.objects.create(
