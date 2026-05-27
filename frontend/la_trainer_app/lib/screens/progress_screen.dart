@@ -41,7 +41,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final token = await AuthService.getToken();
     return {
       'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }

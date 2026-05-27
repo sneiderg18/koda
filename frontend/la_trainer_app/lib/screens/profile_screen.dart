@@ -1,8 +1,9 @@
-import 'dart:io';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import '../config/api_config.dart';
 import '../services/auth_service.dart';
 
 const _kRed1  = Color(0xFFD72105);
@@ -19,7 +20,10 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _perfil;
   bool _loading = true;
-  File? _avatarFile;
+
+  // Avatar
+  String  _avatarActual = '';
+  String  _avatarEmoji  = '🏃';
 
   @override
   void initState() {
@@ -31,21 +35,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final result = await AuthService.getPerfil();
     if (mounted) {
       setState(() {
-        _perfil = result['success'] == true ? result['data'] : {};
+        _perfil  = result['success'] == true ? result['data'] : {};
+        _avatarActual = _perfil?['avatar'] ?? 'avatar_1';
         _loading = false;
       });
     }
   }
 
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
+  // ── Abre el modal de selección de avatar ──────────────────────────────────
+  Future<void> _abrirSelectorAvatar() async {
+    final seleccionado = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AvatarSelectorModal(avatarActual: _avatarActual),
     );
-    if (picked != null && mounted) {
-      setState(() => _avatarFile = File(picked.path));
-    }
+
+    if (seleccionado == null || !mounted) return;
+
+    // Guardar en backend
+    final token = await AuthService.getToken();
+    if (token == null) return;
+
+    try {
+      final res = await http.put(
+        Uri.parse('${ApiConfig.baseUrl}/api/perfil/'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'avatar': seleccionado['id']}),
+      );
+
+      if (res.statusCode == 200 && mounted) {
+        setState(() {
+          _avatarActual = seleccionado['id'] as String;
+          _avatarEmoji  = seleccionado['emoji'] as String;
+          _perfil?['avatar'] = _avatarActual;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Avatar actualizado: ${seleccionado['nombre']}'),
+            backgroundColor: _kRed1,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } catch (_) {}
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -90,7 +128,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // ── Fondo ────────────────────────────────────────────────────
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -103,7 +140,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const Positioned.fill(
             child: CustomPaint(painter: _SportsBgPainter()),
           ),
-          // ── Contenido ────────────────────────────────────────────────
           SafeArea(
             child: Column(
               children: [
@@ -201,32 +237,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ── Avatar con emoji ──────────────────────────────────────────────────────
   Widget _buildAvatar(String username) {
+    // Buscar emoji del avatar actual
+    final emoji = _avatarEmoji.isNotEmpty ? _avatarEmoji : '🏃';
+
     return SizedBox(
       width: 100,
       height: 100,
       child: Stack(
         children: [
-          CircleAvatar(
-            radius: 50,
-            backgroundColor: _kRed1.withOpacity(0.2),
-            backgroundImage:
-                _avatarFile != null ? FileImage(_avatarFile!) : null,
-            child: _avatarFile == null
-                ? Text(
-                    username.isNotEmpty ? username[0].toUpperCase() : '?',
-                    style: GoogleFonts.bebasNeue(
-                      fontSize: 40,
-                      color: Colors.white,
-                    ),
-                  )
-                : null,
+          // Círculo con emoji
+          Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              color: _kRed1.withOpacity(0.15),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: _kRed1.withOpacity(0.4),
+                width: 2,
+              ),
+            ),
+            child: Center(
+              child: Text(
+                emoji,
+                style: const TextStyle(fontSize: 44),
+              ),
+            ),
           ),
+          // Botón editar
           Positioned(
             bottom: 2,
             right: 2,
             child: GestureDetector(
-              onTap: _pickImage,
+              onTap: _abrirSelectorAvatar,
               child: Container(
                 width: 28,
                 height: 28,
@@ -236,8 +281,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   border: Border.all(
                       color: const Color(0xFF0d0d0d), width: 2),
                 ),
-                child: const Icon(Icons.add_rounded,
-                    color: Colors.white, size: 16),
+                child: const Icon(Icons.edit_rounded,
+                    color: Colors.white, size: 14),
               ),
             ),
           ),
@@ -271,6 +316,289 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  Modal selector de avatares
+// ══════════════════════════════════════════════════════════════════════════════
+class _AvatarSelectorModal extends StatefulWidget {
+  final String avatarActual;
+  const _AvatarSelectorModal({required this.avatarActual});
+
+  @override
+  State<_AvatarSelectorModal> createState() => _AvatarSelectorModalState();
+}
+
+class _AvatarSelectorModalState extends State<_AvatarSelectorModal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _slideAnim;
+
+  bool _loading = true;
+  List<Map<String, dynamic>> _avatares = [];
+  String _seleccionado = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _seleccionado = widget.avatarActual;
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+    );
+    _slideAnim = CurvedAnimation(parent: _ctrl, curve: Curves.easeOutCubic);
+    _ctrl.forward();
+    _cargarAvatares();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargarAvatares() async {
+    try {
+      final token = await AuthService.getToken();
+      final res = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/avatares/'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      if (!mounted) return;
+
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        final lista = body['avatares'] as List? ?? [];
+        setState(() {
+          _avatares  = lista.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          _loading   = false;
+        });
+      } else {
+        setState(() => _loading = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SlideTransition(
+      position: Tween<Offset>(
+        begin: const Offset(0, 1),
+        end: Offset.zero,
+      ).animate(_slideAnim),
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.72,
+        decoration: const BoxDecoration(
+          color: Color(0xFF0D0D0D),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            // ── Header ────────────────────────────────────────────────────
+            Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF1C1C1C),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: _kRed1.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.person_rounded,
+                            color: _kRed1, size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Elige tu avatar',
+                            style: GoogleFonts.bebasNeue(
+                              color: Colors.white,
+                              fontSize: 20,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          const Text(
+                            'Selecciona el que mejor te representa',
+                            style: TextStyle(
+                                color: Colors.white38, fontSize: 11),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded,
+                            color: Colors.white38, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Grid de avatares ──────────────────────────────────────────
+            Expanded(
+              child: _loading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: _kRed1))
+                  : _avatares.isEmpty
+                      ? const Center(
+                          child: Text('No se pudieron cargar los avatares',
+                              style: TextStyle(color: Colors.white38)))
+                      : GridView.builder(
+                          padding: const EdgeInsets.all(20),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 14,
+                            mainAxisSpacing: 14,
+                            childAspectRatio: 1.1,
+                          ),
+                          itemCount: _avatares.length,
+                          itemBuilder: (_, i) =>
+                              _buildAvatarCard(_avatares[i]),
+                        ),
+            ),
+
+            // ── Botón confirmar ───────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () {
+                    final avatar = _avatares.firstWhere(
+                      (a) => a['id'] == _seleccionado,
+                      orElse: () => _avatares.first,
+                    );
+                    Navigator.pop(context, avatar);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _kRed1,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(26)),
+                    elevation: 0,
+                  ),
+                  child: Text(
+                    'CONFIRMAR AVATAR',
+                    style: GoogleFonts.bebasNeue(
+                      color: Colors.white,
+                      fontSize: 18,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatarCard(Map<String, dynamic> avatar) {
+    final id          = avatar['id'] as String;
+    final nombre      = avatar['nombre'] as String? ?? '';
+    final descripcion = avatar['descripcion'] as String? ?? '';
+    final emoji       = avatar['emoji'] as String? ?? '🏃';
+    final seleccionado = id == _seleccionado;
+
+    return GestureDetector(
+      onTap: () => setState(() => _seleccionado = id),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          color: seleccionado
+              ? _kRed1.withOpacity(0.15)
+              : const Color(0xFF1C1C1C),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: seleccionado
+                ? _kRed1
+                : Colors.white.withOpacity(0.06),
+            width: seleccionado ? 2 : 1,
+          ),
+          boxShadow: seleccionado
+              ? [
+                  BoxShadow(
+                    color: _kRed1.withOpacity(0.25),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : [],
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 36)),
+            const SizedBox(height: 8),
+            Text(
+              nombre,
+              style: TextStyle(
+                color: seleccionado ? Colors.white : Colors.white70,
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              descripcion,
+              style: const TextStyle(color: Colors.white38, fontSize: 10),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (seleccionado) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _kRed1,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'Seleccionado',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

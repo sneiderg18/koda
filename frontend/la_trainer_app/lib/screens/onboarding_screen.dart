@@ -18,17 +18,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
-  final _edadCtrl               = TextEditingController();
-  final _pesoCtrl               = TextEditingController();
-  final _alturaCtrl             = TextEditingController();
-  final _objetivoTiempoCtrl     = TextEditingController();
+  final _edadCtrl = TextEditingController();
+  final _pesoCtrl = TextEditingController();
+  final _alturaCtrl = TextEditingController();
+  final _objetivoTiempoCtrl = TextEditingController();
   final _condicionesMedicasCtrl = TextEditingController();
-  final _alergiasCtrl           = TextEditingController();
-  final _lesionesCtrl           = TextEditingController();
-  final _diasCtrl               = TextEditingController();
-  final _tiempoSesionCtrl       = TextEditingController();
-  final _comidasPorDiaCtrl      = TextEditingController();
-  final _aguaPorDiaCtrl         = TextEditingController();
+  final _alergiasCtrl = TextEditingController();
+  final _lesionesCtrl = TextEditingController();
+  final _diasCtrl = TextEditingController();
+  final _tiempoSesionCtrl = TextEditingController();
+  final _comidasPorDiaCtrl = TextEditingController();
+  final _aguaPorDiaCtrl = TextEditingController();
 
   String? _genero;
   String? _objetivo;
@@ -40,61 +40,61 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   String? _calidadSueno;
   String? _nivelEstres;
 
-  static const _kRed    = Color(0xFFD72105);
+  static const _kRed = Color(0xFFD72105);
   static const _kDarkBg = Color(0xFF0A0A0F);
   static const _kCardBg = Color(0xFF1A1A2E);
 
   final _generos = const {
-    'Masculino':         'masculino',
-    'Femenino':          'femenino',
+    'Masculino': 'masculino',
+    'Femenino': 'femenino',
     'Prefiero no decir': 'prefiero_no_decir',
   };
 
   final _objetivos = const {
-    'Bajar de peso':       'bajar_peso',
-    'Aumentar masa':       'aumentar_masa',
-    'Mantenerse':          'mantenerse',
+    'Bajar de peso': 'bajar_peso',
+    'Aumentar masa': 'aumentar_masa',
+    'Mantenerse': 'mantenerse',
     'Mejorar resistencia': 'mejorar_resistencia',
-    'Rehabilitación':      'rehabilitacion',
+    'Rehabilitación': 'rehabilitacion',
   };
 
   final _motivaciones = const {
-    'Salud':       'salud',
-    'Estética':    'estetica',
+    'Salud': 'salud',
+    'Estética': 'estetica',
     'Rendimiento': 'rendimiento',
   };
 
   final _nivelesActividad = const {
-    'Sedentario':   'sedentario',
+    'Sedentario': 'sedentario',
     'Principiante': 'principiante',
-    'Intermedio':   'intermedio',
-    'Avanzado':     'avanzado',
+    'Intermedio': 'intermedio',
+    'Avanzado': 'avanzado',
   };
 
   final _lugares = const {
-    'Casa':     'casa',
+    'Casa': 'casa',
     'Gimnasio': 'gimnasio',
-    'Ambos':    'ambos',
+    'Ambos': 'ambos',
   };
 
   final _restricciones = const {
-    'Ninguna':     'ninguna',
+    'Ninguna': 'ninguna',
     'Vegetariano': 'vegetariano',
-    'Vegano':      'vegano',
-    'Sin gluten':  'sin_gluten',
+    'Vegano': 'vegano',
+    'Sin gluten': 'sin_gluten',
     'Sin lactosa': 'sin_lactosa',
   };
 
   final _calidadesSueno = const {
-    'Bueno':   'bueno',
+    'Bueno': 'bueno',
     'Regular': 'regular',
-    'Malo':    'malo',
+    'Malo': 'malo',
   };
 
   final _nivelesEstres = const {
-    'Bajo':  'bajo',
+    'Bajo': 'bajo',
     'Medio': 'medio',
-    'Alto':  'alto',
+    'Alto': 'alto',
   };
 
   @override
@@ -121,47 +121,53 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final token = await AuthService.getToken();
       final Map<String, dynamic> body = {};
 
-      final edad    = int.tryParse(_edadCtrl.text.trim());
-      final dias    = int.tryParse(_diasCtrl.text.trim());
-      final tiempo  = int.tryParse(_tiempoSesionCtrl.text.trim());
+      final edad = int.tryParse(_edadCtrl.text.trim());
+      final dias = int.tryParse(_diasCtrl.text.trim());
+      final tiempo = int.tryParse(_tiempoSesionCtrl.text.trim());
       final comidas = int.tryParse(_comidasPorDiaCtrl.text.trim());
-      final peso    = double.tryParse(_pesoCtrl.text.trim());
-      final altura  = double.tryParse(_alturaCtrl.text.trim());
-      final agua    = double.tryParse(_aguaPorDiaCtrl.text.trim());
+      final peso = double.tryParse(_pesoCtrl.text.trim());
+      final altura = double.tryParse(_alturaCtrl.text.trim());
+      final agua = double.tryParse(_aguaPorDiaCtrl.text.trim());
 
-      if (edad    != null) body['edad']               = edad;
-      if (peso    != null) body['peso']               = peso;
-      if (altura  != null) body['altura']             = altura;
-      if (dias    != null) body['dias_entrenamiento'] = dias;
-      if (tiempo  != null) body['tiempo_sesion']      = tiempo;
-      if (comidas != null) body['comidas_por_dia']    = comidas;
-      if (agua    != null) body['agua_por_dia']       = agua;
+      if (edad != null) body['edad'] = edad;
+      if (peso != null) body['peso'] = peso;
+      if (altura != null) body['altura'] = altura;
+      if (dias != null) body['dias_entrenamiento'] = dias;
+      if (tiempo != null) body['tiempo_sesion'] = tiempo;
+      if (comidas != null) body['comidas_por_dia'] = comidas;
+      if (agua != null) body['agua_por_dia'] = agua;
 
-      final objTiempo   = _objetivoTiempoCtrl.text.trim();
+      final objTiempo = _objetivoTiempoCtrl.text.trim();
       final condiciones = _condicionesMedicasCtrl.text.trim();
-      final alergias    = _alergiasCtrl.text.trim();
-      final lesiones    = _lesionesCtrl.text.trim();
+      final alergias = _alergiasCtrl.text.trim();
+      final lesiones = _lesionesCtrl.text.trim();
 
-      if (objTiempo.isNotEmpty)   body['objetivo_tiempo']     = objTiempo;
+      if (objTiempo.isNotEmpty) body['objetivo_tiempo'] = objTiempo;
       if (condiciones.isNotEmpty) body['condiciones_medicas'] = condiciones;
-      if (alergias.isNotEmpty)    body['alergias']            = alergias;
-      if (lesiones.isNotEmpty)    body['lesiones']            = lesiones;
+      if (alergias.isNotEmpty) body['alergias'] = alergias;
+      if (lesiones.isNotEmpty) body['lesiones'] = lesiones;
 
-      if (_genero                    != null) body['genero']                     = _generos[_genero!]!;
-      if (_objetivo                  != null) body['objetivo']                   = _objetivos[_objetivo!]!;
-      if (_motivacion                != null) body['motivacion']                 = _motivaciones[_motivacion!]!;
-      if (_nivelActividad            != null) body['nivel_actividad']            = _nivelesActividad[_nivelActividad!]!;
-      if (_lugarEntrenamiento        != null) body['lugar_entrenamiento']        = _lugares[_lugarEntrenamiento!]!;
-      if (_restriccionesAlimentarias != null) body['restricciones_alimentarias'] = _restricciones[_restriccionesAlimentarias!]!;
-      if (_calidadSueno              != null) body['calidad_sueno']              = _calidadesSueno[_calidadSueno!]!;
-      if (_nivelEstres               != null) body['nivel_estres']               = _nivelesEstres[_nivelEstres!]!;
-      if (_tieneEquipo               != null) body['tiene_equipo']               = _tieneEquipo == 'Sí';
+      if (_genero != null) body['genero'] = _generos[_genero!]!;
+      if (_objetivo != null) body['objetivo'] = _objetivos[_objetivo!]!;
+      if (_motivacion != null)
+        body['motivacion'] = _motivaciones[_motivacion!]!;
+      if (_nivelActividad != null)
+        body['nivel_actividad'] = _nivelesActividad[_nivelActividad!]!;
+      if (_lugarEntrenamiento != null)
+        body['lugar_entrenamiento'] = _lugares[_lugarEntrenamiento!]!;
+      if (_restriccionesAlimentarias != null)
+        body['restricciones_alimentarias'] =
+            _restricciones[_restriccionesAlimentarias!]!;
+      if (_calidadSueno != null)
+        body['calidad_sueno'] = _calidadesSueno[_calidadSueno!]!;
+      if (_nivelEstres != null)
+        body['nivel_estres'] = _nivelesEstres[_nivelEstres!]!;
+      if (_tieneEquipo != null) body['tiene_equipo'] = _tieneEquipo == 'Sí';
 
       final response = await http.post(
         Uri.parse('${ApiConfig.baseUrl}/api/onboarding/'),
         headers: {
           'Content-Type': 'application/json',
-          'ngrok-skip-browser-warning': 'true',
           'Authorization': 'Bearer $token',
         },
         body: jsonEncode(body),
@@ -180,7 +186,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         try {
           final data = jsonDecode(response.body);
           if (data is Map) {
-            errorMsg = data.entries.map((e) => '${e.key}: ${e.value}').join('\n');
+            errorMsg = data.entries
+                .map((e) => '${e.key}: ${e.value}')
+                .join('\n');
           }
         } catch (_) {
           errorMsg = response.body;
@@ -219,98 +227,189 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               // ── Datos personales ──────────────────────────────────────
               _sectionTitle('Datos personales'),
               const SizedBox(height: 16),
               _buildRow([
-                _numField(_edadCtrl, 'Edad', Icons.cake_rounded, hint: 'Ej. 25', isInt: true),
-                _numField(_pesoCtrl, 'Peso (kg)', Icons.monitor_weight_rounded, hint: 'Ej. 75.5'),
+                _numField(
+                  _edadCtrl,
+                  'Edad',
+                  Icons.cake_rounded,
+                  hint: 'Ej. 25',
+                  isInt: true,
+                ),
+                _numField(
+                  _pesoCtrl,
+                  'Peso (kg)',
+                  Icons.monitor_weight_rounded,
+                  hint: 'Ej. 75.5',
+                ),
               ]),
               const SizedBox(height: 12),
               _buildRow([
-                _numField(_alturaCtrl, 'Altura (cm)', Icons.height_rounded, hint: 'Ej. 175.0'),
-                _dropdown('Género', _generos.keys.toList(), _genero,
-                    Icons.person_rounded, (v) => setState(() => _genero = v)),
+                _numField(
+                  _alturaCtrl,
+                  'Altura (cm)',
+                  Icons.height_rounded,
+                  hint: 'Ej. 175.0',
+                ),
+                _dropdown(
+                  'Género',
+                  _generos.keys.toList(),
+                  _genero,
+                  Icons.person_rounded,
+                  (v) => setState(() => _genero = v),
+                ),
               ]),
               const SizedBox(height: 28),
 
               // ── Objetivos ─────────────────────────────────────────────
               _sectionTitle('Objetivos'),
               const SizedBox(height: 16),
-              _dropdown('Objetivo principal', _objetivos.keys.toList(), _objetivo,
-                  Icons.flag_rounded, (v) => setState(() => _objetivo = v)),
+              _dropdown(
+                'Objetivo principal',
+                _objetivos.keys.toList(),
+                _objetivo,
+                Icons.flag_rounded,
+                (v) => setState(() => _objetivo = v),
+              ),
               const SizedBox(height: 12),
-              _dropdown('Motivación', _motivaciones.keys.toList(), _motivacion,
-                  Icons.star_rounded, (v) => setState(() => _motivacion = v)),
+              _dropdown(
+                'Motivación',
+                _motivaciones.keys.toList(),
+                _motivacion,
+                Icons.star_rounded,
+                (v) => setState(() => _motivacion = v),
+              ),
               const SizedBox(height: 12),
-              _textField(_objetivoTiempoCtrl, 'Describe tu meta',
-                  Icons.calendar_today_rounded,
-                  hint: 'Ej. Bajar 5kg en 3 meses', required: false),
+              _textField(
+                _objetivoTiempoCtrl,
+                'Describe tu meta',
+                Icons.calendar_today_rounded,
+                hint: 'Ej. Bajar 5kg en 3 meses',
+                required: false,
+              ),
               const SizedBox(height: 28),
 
               // ── Entrenamiento ─────────────────────────────────────────
               _sectionTitle('Entrenamiento'),
               const SizedBox(height: 16),
-              _dropdown('Nivel de actividad', _nivelesActividad.keys.toList(),
-                  _nivelActividad, Icons.fitness_center_rounded,
-                  (v) => setState(() => _nivelActividad = v)),
+              _dropdown(
+                'Nivel de actividad',
+                _nivelesActividad.keys.toList(),
+                _nivelActividad,
+                Icons.fitness_center_rounded,
+                (v) => setState(() => _nivelActividad = v),
+              ),
               const SizedBox(height: 12),
               _buildRow([
-                _numField(_diasCtrl, 'Días/semana', Icons.event_rounded, hint: 'Ej. 3', isInt: true),
-                _numField(_tiempoSesionCtrl, 'Min/sesión', Icons.timer_rounded, hint: 'Ej. 45', isInt: true),
+                _numField(
+                  _diasCtrl,
+                  'Días/semana',
+                  Icons.event_rounded,
+                  hint: 'Ej. 3',
+                  isInt: true,
+                ),
+                _numField(
+                  _tiempoSesionCtrl,
+                  'Min/sesión',
+                  Icons.timer_rounded,
+                  hint: 'Ej. 45',
+                  isInt: true,
+                ),
               ]),
               const SizedBox(height: 12),
-              _dropdown('Lugar de entrenamiento', _lugares.keys.toList(),
-                  _lugarEntrenamiento, Icons.place_rounded,
-                  (v) => setState(() => _lugarEntrenamiento = v)),
+              _dropdown(
+                'Lugar de entrenamiento',
+                _lugares.keys.toList(),
+                _lugarEntrenamiento,
+                Icons.place_rounded,
+                (v) => setState(() => _lugarEntrenamiento = v),
+              ),
               const SizedBox(height: 12),
-              _dropdown('¿Tiene equipo/pesas?', ['Sí', 'No'], _tieneEquipo,
-                  Icons.sports_gymnastics_rounded,
-                  (v) => setState(() => _tieneEquipo = v)),
+              _dropdown(
+                '¿Tiene equipo/pesas?',
+                ['Sí', 'No'],
+                _tieneEquipo,
+                Icons.sports_gymnastics_rounded,
+                (v) => setState(() => _tieneEquipo = v),
+              ),
               const SizedBox(height: 28),
 
               // ── Salud ─────────────────────────────────────────────────
               _sectionTitle('Salud'),
               const SizedBox(height: 16),
-              _textField(_condicionesMedicasCtrl, 'Condiciones médicas',
-                  Icons.medical_information_rounded,
-                  hint: 'Ej. Diabetes tipo 2', required: false),
+              _textField(
+                _condicionesMedicasCtrl,
+                'Condiciones médicas',
+                Icons.medical_information_rounded,
+                hint: 'Ej. Diabetes tipo 2',
+                required: false,
+              ),
               const SizedBox(height: 12),
-              _textField(_alergiasCtrl, 'Alergias',
-                  Icons.warning_amber_rounded,
-                  hint: 'Ej. Maní, mariscos', required: false),
+              _textField(
+                _alergiasCtrl,
+                'Alergias',
+                Icons.warning_amber_rounded,
+                hint: 'Ej. Maní, mariscos',
+                required: false,
+              ),
               const SizedBox(height: 12),
-              _textField(_lesionesCtrl, 'Lesiones',
-                  Icons.healing_rounded,
-                  hint: 'Ej. Dolor de rodilla derecha', required: false),
+              _textField(
+                _lesionesCtrl,
+                'Lesiones',
+                Icons.healing_rounded,
+                hint: 'Ej. Dolor de rodilla derecha',
+                required: false,
+              ),
               const SizedBox(height: 28),
 
               // ── Alimentación ──────────────────────────────────────────
               _sectionTitle('Alimentación'),
               const SizedBox(height: 16),
-              _dropdown('Restricciones alimentarias', _restricciones.keys.toList(),
-                  _restriccionesAlimentarias, Icons.no_meals_rounded,
-                  (v) => setState(() => _restriccionesAlimentarias = v)),
+              _dropdown(
+                'Restricciones alimentarias',
+                _restricciones.keys.toList(),
+                _restriccionesAlimentarias,
+                Icons.no_meals_rounded,
+                (v) => setState(() => _restriccionesAlimentarias = v),
+              ),
               const SizedBox(height: 12),
               _buildRow([
-                _numField(_comidasPorDiaCtrl, 'Comidas/día', Icons.restaurant_rounded,
-                    hint: 'Ej. 5', isInt: true),
-                _numField(_aguaPorDiaCtrl, 'Agua/día (L)', Icons.water_drop_rounded,
-                    hint: 'Ej. 2.5'),
+                _numField(
+                  _comidasPorDiaCtrl,
+                  'Comidas/día',
+                  Icons.restaurant_rounded,
+                  hint: 'Ej. 5',
+                  isInt: true,
+                ),
+                _numField(
+                  _aguaPorDiaCtrl,
+                  'Agua/día (L)',
+                  Icons.water_drop_rounded,
+                  hint: 'Ej. 2.5',
+                ),
               ]),
               const SizedBox(height: 28),
 
               // ── Hábitos ───────────────────────────────────────────────
               _sectionTitle('Hábitos'),
               const SizedBox(height: 16),
-              _dropdown('Calidad del sueño', _calidadesSueno.keys.toList(),
-                  _calidadSueno, Icons.bedtime_rounded,
-                  (v) => setState(() => _calidadSueno = v)),
+              _dropdown(
+                'Calidad del sueño',
+                _calidadesSueno.keys.toList(),
+                _calidadSueno,
+                Icons.bedtime_rounded,
+                (v) => setState(() => _calidadSueno = v),
+              ),
               const SizedBox(height: 12),
-              _dropdown('Nivel de estrés', _nivelesEstres.keys.toList(),
-                  _nivelEstres, Icons.psychology_rounded,
-                  (v) => setState(() => _nivelEstres = v)),
+              _dropdown(
+                'Nivel de estrés',
+                _nivelesEstres.keys.toList(),
+                _nivelEstres,
+                Icons.psychology_rounded,
+                (v) => setState(() => _nivelEstres = v),
+              ),
               const SizedBox(height: 40),
 
               _buildSportButton(),
@@ -372,13 +471,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           style: ElevatedButton.styleFrom(
             backgroundColor: _kRed,
             disabledBackgroundColor: _kRed.withOpacity(0.6),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
             elevation: 0,
           ),
           child: _isLoading
               ? const SizedBox(
-                  width: 22, height: 22,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2.5,
+                  ),
+                )
               : Text(
                   'CONTINUAR',
                   style: GoogleFonts.bebasNeue(
@@ -394,29 +500,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _sectionTitle(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 4),
-        child: Row(
-          children: [
-            Container(
-              width: 4,
-              height: 20,
-              decoration: BoxDecoration(
-                color: _kRed,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              text,
-              style: GoogleFonts.bebasNeue(
-                fontSize: 18,
-                color: Colors.white,
-                letterSpacing: 1,
-              ),
-            ),
-          ],
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
+      children: [
+        Container(
+          width: 4,
+          height: 20,
+          decoration: BoxDecoration(
+            color: _kRed,
+            borderRadius: BorderRadius.circular(2),
+          ),
         ),
-      );
+        const SizedBox(width: 10),
+        Text(
+          text,
+          style: GoogleFonts.bebasNeue(
+            fontSize: 18,
+            color: Colors.white,
+            letterSpacing: 1,
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _buildRow(List<Widget> children) {
     final withGaps = <Widget>[];
@@ -433,7 +539,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     IconData icon, {
     String hint = '',
     bool isInt = false,
-    bool required = true,
+    bool required = false,
   }) {
     return TextFormField(
       controller: ctrl,
@@ -476,7 +582,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     String? value,
     IconData icon,
     void Function(String?) onChanged, {
-    bool required = true,
+    bool required = false, // ← cambio aquí
   }) {
     return DropdownButtonFormField<String>(
       value: value,
@@ -484,9 +590,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       style: const TextStyle(color: Colors.white),
       decoration: _deco(label, icon, ''),
       isExpanded: true,
-      items: items.map((i) => DropdownMenuItem(value: i, child: Text(i))).toList(),
+      items: items
+          .map((i) => DropdownMenuItem(value: i, child: Text(i)))
+          .toList(),
       onChanged: onChanged,
-      validator: required ? (v) => v == null ? 'Selecciona una opción' : null : null,
+      validator: required
+          ? (v) => v == null ? 'Selecciona una opción' : null
+          : null,
     );
   }
 

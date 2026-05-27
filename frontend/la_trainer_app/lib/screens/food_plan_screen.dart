@@ -44,10 +44,9 @@ class _FoodPlanScreenState extends State<FoodPlanScreen> {
   }
 
   Future<Map<String, String>> get _headers async {
-    final token = await AuthService.getValidToken();
+    final token = await AuthService.getToken();
     return {
       'Content-Type': 'application/json',
-      'ngrok-skip-browser-warning': 'true',
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }
