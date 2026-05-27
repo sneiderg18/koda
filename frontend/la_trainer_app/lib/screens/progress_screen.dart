@@ -1,8 +1,17 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../services/auth_service.dart';
+
+// ── Paleta ─────────────────────────────────────────────────────────────────────
+const _kRed         = Color(0xFFF25050);
+const _kBg          = Color(0xFFF5F7FA);
+const _kDark        = Color(0xFF1A1A2E);
+const _cVerdeFuerte = Color(0xFF2E7D32);
+const _cVerdeClaro  = Color(0xFF81C784);
+const _cAzul        = Color(0xFF1976D2);
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
@@ -12,18 +21,10 @@ class ProgressScreen extends StatefulWidget {
 }
 
 class _ProgressScreenState extends State<ProgressScreen> {
-  static const _kRed         = Color(0xFFD72105);
-  static const _kBg          = Color(0xFFF5F7FA);
-  static const _kDark        = Color(0xFF1A1A2E);
-  static const _cVerdeFuerte = Color(0xFF2E7D32);
-  static const _cVerdeClaro  = Color(0xFF81C784);
-  static const _cAzul        = Color(0xFF1976D2);
-
   bool _loading = true;
   String? _error;
   DateTime _mesActual = DateTime.now();
 
-  // Detalle completo por fecha
   final Map<String, Map<String, dynamic>> _detalleEntrenamiento = {};
   final Map<String, Map<String, dynamic>> _detalleAlimentacion  = {};
 
@@ -45,11 +46,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
   }
 
   Future<void> _cargarDatos() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error   = null;
+    });
     try {
       final h = await _headers;
       final results = await Future.wait([
-        http.get(Uri.parse('${ApiConfig.baseUrl}/api/actividad/'), headers: h),
+        http.get(Uri.parse('${ApiConfig.baseUrl}/api/actividad/'),            headers: h),
         http.get(Uri.parse('${ApiConfig.baseUrl}/api/progreso/alimentacion/'), headers: h),
       ]);
 
@@ -83,10 +87,12 @@ class _ProgressScreenState extends State<ProgressScreen> {
       _calcularRachas();
       setState(() => _loading = false);
     } catch (e) {
-      if (mounted) setState(() {
-        _error   = 'No se pudo cargar el progreso.';
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error   = 'No se pudo cargar el progreso.';
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -96,11 +102,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
       _rachaMaxima = 0;
       return;
     }
-
     final fechas = _detalleEntrenamiento.keys.toList()..sort();
     int maxima   = 1;
     int segmento = 1;
-
     for (int i = 1; i < fechas.length; i++) {
       final prev = DateTime.parse(fechas[i - 1]);
       final curr = DateTime.parse(fechas[i]);
@@ -138,7 +142,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final entreno = _detalleEntrenamiento[fecha];
     final alim    = _detalleAlimentacion[fecha];
     if (entreno == null && alim == null) return;
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -151,92 +154,175 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
+  // ── BUILD ──────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _kBg,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _kDark),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Progreso',
-            style: TextStyle(
-                color: _kDark, fontWeight: FontWeight.bold, fontSize: 20)),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: _kRed),
-            onPressed: _cargarDatos,
+      body: Column(
+        children: [
+          _buildBanner(),
+          _buildHomeStrip(),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator(color: _kRed))
+                : _error != null
+                    ? _buildError()
+                    : RefreshIndicator(
+                        color: _kRed,
+                        onRefresh: _cargarDatos,
+                        child: ListView(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 20),
+                          children: [
+                            _buildRachaCard(),
+                            const SizedBox(height: 20),
+                            _buildCalendario(),
+                            const SizedBox(height: 20),
+                            _buildResumen(),
+                            const SizedBox(height: 20),
+                          ],
+                        ),
+                      ),
           ),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(color: const Color(0xFFEEEEEE), height: 1),
-        ),
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _kRed))
-          : _error != null
-              ? _buildError()
-              : RefreshIndicator(
-                  color: _kRed,
-                  onRefresh: _cargarDatos,
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 24),
-                    children: [
-                      _buildRachaCard(),
-                      const SizedBox(height: 20),
-                      _buildCalendario(),
-                      const SizedBox(height: 20),
-                      _buildResumen(),
-                      const SizedBox(height: 20),
-                    ],
-                  ),
-                ),
     );
   }
 
+  // ── Banner rojo fijo ───────────────────────────────────────────────────────
+  Widget _buildBanner() {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFF25050), Color(0xFFB83030)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: IconButton(
+                icon: const Icon(Icons.refresh_rounded,
+                    color: Colors.white70, size: 20),
+                onPressed: _cargarDatos,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 18),
+              child: Text(
+                'MI PROGRESO',
+                style: GoogleFonts.bebasNeue(
+                  color: Colors.white,
+                  fontSize: 26,
+                  letterSpacing: 3,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Botón HOME fijo (no scrollea) ─────────────────────────────────────────
+  Widget _buildHomeStrip() {
+    return Container(
+      color: _kBg,
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Center(
+        child: SizedBox(
+          width: MediaQuery.of(context).size.width * 0.80,
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: _kRed,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: _kRed.withValues(alpha: 0.4),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white, size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    'HOME',
+                    style: GoogleFonts.bebasNeue(
+                      color: Colors.white,
+                      fontSize: 15,
+                      letterSpacing: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Racha card ─────────────────────────────────────────────────────────────
   Widget _buildRachaCard() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFFD72105), Color(0xFFD90B1C)],
+          colors: [Color(0xFFF25050), Color(0xFFB83030)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(
-            color: _kRed.withOpacity(0.3),
+        boxShadow: [
+          BoxShadow(
+            color: _kRed.withValues(alpha: 0.3),
             blurRadius: 12,
-            offset: const Offset(0, 4))],
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(children: [
         const Text('🔥', style: TextStyle(fontSize: 40)),
         const SizedBox(width: 16),
         Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(
-              '$_rachaActual ${_rachaActual == 1 ? 'día' : 'días'} de racha',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text('Racha máxima: $_rachaMaxima días',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '$_rachaActual ${_rachaActual == 1 ? 'día' : 'días'} de racha',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Racha máxima: $_rachaMaxima días',
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.8), fontSize: 13)),
-          ]),
+                    color: Colors.white.withValues(alpha: 0.8), fontSize: 13),
+              ),
+            ],
+          ),
         ),
       ]),
     );
   }
 
+  // ── Calendario ─────────────────────────────────────────────────────────────
   Widget _buildCalendario() {
     final primerDia   = DateTime(_mesActual.year, _mesActual.month, 1);
     final ultimoDia   = DateTime(_mesActual.year, _mesActual.month + 1, 0);
@@ -251,20 +337,22 @@ class _ProgressScreenState extends State<ProgressScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
-            offset: const Offset(0, 3))],
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(children: [
-        // Navegación mes
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             IconButton(
               icon: const Icon(Icons.chevron_left_rounded, color: _kDark),
-              onPressed: () => setState(() => _mesActual =
-                  DateTime(_mesActual.year, _mesActual.month - 1)),
+              onPressed: () => setState(() =>
+                  _mesActual = DateTime(_mesActual.year, _mesActual.month - 1)),
             ),
             Text(
               '${_nombreMes(_mesActual.month)} ${_mesActual.year}',
@@ -273,34 +361,31 @@ class _ProgressScreenState extends State<ProgressScreen> {
             ),
             IconButton(
               icon: const Icon(Icons.chevron_right_rounded, color: _kDark),
-              onPressed: () => setState(() => _mesActual =
-                  DateTime(_mesActual.year, _mesActual.month + 1)),
+              onPressed: () => setState(() =>
+                  _mesActual = DateTime(_mesActual.year, _mesActual.month + 1)),
             ),
           ],
         ),
         const SizedBox(height: 8),
-
-        // Encabezado días
         Row(
           children: encabezados.map((d) => Expanded(
             child: Center(
-              child: Text(d, style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: (d == 'S' || d == 'D')
-                    ? Colors.grey[400]
-                    : Colors.grey[600],
-              )),
+              child: Text(d,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: (d == 'S' || d == 'D')
+                        ? Colors.grey[400]
+                        : Colors.grey[600],
+                  )),
             ),
           )).toList(),
         ),
         const SizedBox(height: 6),
-
-        // Hint interactividad
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: _kDark.withOpacity(0.04),
+            color: _kDark.withValues(alpha: 0.04),
             borderRadius: BorderRadius.circular(20),
           ),
           child: const Row(mainAxisSize: MainAxisSize.min, children: [
@@ -311,18 +396,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
           ]),
         ),
         const SizedBox(height: 10),
-
-        // Cuadrícula
         ...List.generate(filas, (fila) {
           return Row(
             children: List.generate(7, (col) {
               final idx    = fila * 7 + col;
               final diaNum = idx - offset + 1;
-
               if (diaNum < 1 || diaNum > ultimoDia.day) {
                 return const Expanded(child: SizedBox(height: 44));
               }
-
               final fecha = '${_mesActual.year}-'
                   '${_mesActual.month.toString().padLeft(2, '0')}-'
                   '${diaNum.toString().padLeft(2, '0')}';
@@ -341,14 +422,15 @@ class _ProgressScreenState extends State<ProgressScreen> {
                         duration: const Duration(milliseconds: 200),
                         decoration: BoxDecoration(
                           color: tieneActividad
-                              ? color.withOpacity(0.85)
+                              ? color.withValues(alpha: 0.85)
                               : Colors.transparent,
                           shape: BoxShape.circle,
                           border: esHoy
                               ? Border.all(color: _kRed, width: 2)
                               : tieneActividad
                                   ? Border.all(
-                                      color: color.withOpacity(0.4), width: 1)
+                                      color: color.withValues(alpha: 0.4),
+                                      width: 1)
                                   : null,
                         ),
                         child: Center(
@@ -377,10 +459,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
             }),
           );
         }),
-
         const SizedBox(height: 16),
-
-        // Leyenda
         Wrap(
           spacing: 12,
           runSpacing: 8,
@@ -398,23 +477,24 @@ class _ProgressScreenState extends State<ProgressScreen> {
   Widget _leyenda(Color color, String texto) {
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Container(
-          width: 11, height: 11,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        width: 11, height: 11,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
       const SizedBox(width: 5),
       Text(texto, style: const TextStyle(fontSize: 11, color: Colors.grey)),
     ]);
   }
 
+  // ── Resumen del mes ────────────────────────────────────────────────────────
   Widget _buildResumen() {
-    final prefijo =
-        '${_mesActual.year}-${_mesActual.month.toString().padLeft(2, '0')}';
+    final prefijo = '${_mesActual.year}-${_mesActual.month.toString().padLeft(2, '0')}';
     final sesionesDelMes =
         _detalleEntrenamiento.keys.where((f) => f.startsWith(prefijo)).length;
-    final alimentDelMes =
+    final alimentDelMes  =
         _detalleAlimentacion.keys.where((f) => f.startsWith(prefijo)).length;
-    final diasEnElMes =
+    final diasEnElMes    =
         DateTime(_mesActual.year, _mesActual.month + 1, 0).day;
-    final pctConstancia = diasEnElMes > 0
+    final pctConstancia  = diasEnElMes > 0
         ? (sesionesDelMes / diasEnElMes * 100).clamp(0.0, 100.0)
         : 0.0;
 
@@ -423,10 +503,13 @@ class _ProgressScreenState extends State<ProgressScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
-            offset: const Offset(0, 3))],
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Row(children: [
@@ -463,7 +546,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(children: [
@@ -487,20 +570,24 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
+  // ── Error ──────────────────────────────────────────────────────────────────
   Widget _buildError() {
     return Center(
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.cloud_off_rounded, size: 56, color: Colors.grey),
         const SizedBox(height: 12),
-        Text(_error!, style: const TextStyle(color: Colors.grey, fontSize: 15)),
+        Text(_error!,
+            style: const TextStyle(color: Colors.grey, fontSize: 15)),
         const SizedBox(height: 16),
         ElevatedButton(
           onPressed: _cargarDatos,
           style: ElevatedButton.styleFrom(
             backgroundColor: _kRed,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
           ),
-          child: const Text('Reintentar', style: TextStyle(color: Colors.white)),
+          child: const Text('Reintentar',
+              style: TextStyle(color: Colors.white)),
         ),
       ]),
     );
@@ -509,14 +596,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
   String _nombreMes(int m) {
     const meses = [
       'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
     ];
     return meses[m - 1];
   }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Bottom sheet de detalle del día
+// Bottom sheet: detalle del día
 // ══════════════════════════════════════════════════════════════════════════════
 class _DetalleDiaSheet extends StatelessWidget {
   final String fecha;
@@ -529,35 +616,42 @@ class _DetalleDiaSheet extends StatelessWidget {
     required this.alim,
   });
 
-  static const _kDark        = Color(0xFF1A1A2E);
-  static const _cVerdeFuerte = Color(0xFF2E7D32);
-  static const _cVerdeClaro  = Color(0xFF81C784);
-  static const _cAzul        = Color(0xFF1976D2);
-  static const _kRed         = Color(0xFFD72105);
+  // Constantes locales con nombres sin underscore inicial para evitar lint
+  static const sheetDark        = Color(0xFF1A1A2E);
+  static const sheetVerdeFuerte = Color(0xFF2E7D32);
+  static const sheetVerdeClaro  = Color(0xFF81C784);
+  static const sheetAzul        = Color(0xFF1976D2);
+  static const sheetRed         = Color(0xFFF25050);
 
-  String get _fechaFormateada {
+  String get fechaFormateada {
     final parts = fecha.split('-');
     if (parts.length != 3) return fecha;
     const meses = [
       '', 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
     ];
     final mes = int.tryParse(parts[1]) ?? 0;
     return '${parts[2]} de ${meses[mes]} ${parts[0]}';
   }
 
-  _NivelConfig _nivelConfig(String nivel) {
+  _NivelConfig nivelConfig(String nivel) {
     switch (nivel) {
-      case 'excelente': return _NivelConfig('🌟', 'Excelente', _cVerdeFuerte);
-      case 'bueno':     return _NivelConfig('✅', 'Bueno',     const Color(0xFF43C6AC));
-      case 'regular':   return _NivelConfig('😐', 'Regular',   const Color(0xFFFF9800));
+      case 'excelente':
+        return _NivelConfig('🌟', 'Excelente', sheetVerdeFuerte);
+      case 'bueno':
+        return _NivelConfig('✅', 'Bueno', const Color(0xFF43C6AC));
+      case 'regular':
+        return _NivelConfig('😐', 'Regular', const Color(0xFFFF9800));
       case 'malo':
-      default:          return _NivelConfig('😕', 'Malo',      _kRed);
+      default:
+        return _NivelConfig('😕', 'Malo', sheetRed);
     }
   }
 
-  String get _resumenDia {
-    if (entreno != null && alim != null) return 'Entrenaste y registraste tu alimentación 💪';
+  String get resumenDia {
+    if (entreno != null && alim != null) {
+      return 'Entrenaste y registraste tu alimentación 💪';
+    }
     if (entreno != null) return 'Solo entrenaste este día';
     if (alim    != null) return 'Solo registraste tu alimentación';
     return 'Sin actividad registrada';
@@ -575,7 +669,6 @@ class _DetalleDiaSheet extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Handle
           Center(
             child: Container(
               width: 40, height: 4,
@@ -586,25 +679,21 @@ class _DetalleDiaSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-
-          // Fecha y resumen
-          Text(_fechaFormateada,
-              style: const TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold, color: _kDark)),
+          Text(
+            fechaFormateada,
+            style: const TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold, color: sheetDark),
+          ),
           const SizedBox(height: 4),
-          Text(_resumenDia,
-              style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+          Text(
+            resumenDia,
+            style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+          ),
           const SizedBox(height: 20),
-
-          // Entrenamiento
-          _buildSeccionEntrenamiento(),
+          buildSeccionEntrenamiento(),
           const SizedBox(height: 12),
-
-          // Alimentación
-          _buildSeccionAlimentacion(),
+          buildSeccionAlimentacion(),
           const SizedBox(height: 24),
-
-          // Botón cerrar
           SizedBox(
             width: double.infinity,
             child: TextButton(
@@ -617,7 +706,7 @@ class _DetalleDiaSheet extends StatelessWidget {
               ),
               child: const Text('Cerrar',
                   style: TextStyle(
-                      color: _kDark, fontWeight: FontWeight.w600)),
+                      color: sheetDark, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -625,60 +714,56 @@ class _DetalleDiaSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildSeccionEntrenamiento() {
+  Widget buildSeccionEntrenamiento() {
     if (entreno == null) {
-      return _buildSinActividad(
+      return buildSinActividad(
         Icons.fitness_center_rounded,
         'Entrenamiento',
         'No entrenaste este día',
       );
     }
-
     final sesion = entreno!['sesion_numero'] ?? '—';
     final notas  = (entreno!['notas'] ?? '').toString().trim();
-
-    return _buildTarjeta(
-      color: _cVerdeClaro,
+    return buildTarjeta(
+      color: sheetVerdeClaro,
       icon: Icons.fitness_center_rounded,
       titulo: 'Entrenamiento',
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _buildFila(Icons.tag_rounded, 'Sesión completada',
-            'Sesión #$sesion', _cVerdeFuerte),
+        buildFila(Icons.tag_rounded, 'Sesión completada',
+            'Sesión #$sesion', sheetVerdeFuerte),
         if (notas.isNotEmpty) ...[
           const SizedBox(height: 8),
-          _buildFila(Icons.edit_note_rounded, 'Notas', notas, Colors.grey),
+          buildFila(Icons.edit_note_rounded, 'Notas', notas, Colors.grey),
         ],
       ]),
     );
   }
 
-  Widget _buildSeccionAlimentacion() {
+  Widget buildSeccionAlimentacion() {
     if (alim == null) {
-      return _buildSinActividad(
+      return buildSinActividad(
         Icons.restaurant_rounded,
         'Alimentación',
         'No registraste tu alimentación',
       );
     }
-
     final nivelStr = (alim!['nivel_cumplimiento'] ?? '').toString();
     final cal      = alim!['calorias_consumidas'];
     final agua     = alim!['agua_consumida'];
     final notas    = (alim!['notas'] ?? '').toString().trim();
-    final cfg      = _nivelConfig(nivelStr);
+    final cfg      = nivelConfig(nivelStr);
 
-    return _buildTarjeta(
-      color: _cAzul,
+    return buildTarjeta(
+      color: sheetAzul,
       icon: Icons.restaurant_rounded,
       titulo: 'Alimentación',
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Badge nivel
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: cfg.color.withOpacity(0.1),
+            color: cfg.color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: cfg.color.withOpacity(0.3)),
+            border: Border.all(color: cfg.color.withValues(alpha: 0.3)),
           ),
           child: Row(children: [
             Text(cfg.emoji, style: const TextStyle(fontSize: 20)),
@@ -692,23 +777,23 @@ class _DetalleDiaSheet extends StatelessWidget {
         ),
         if (cal != null) ...[
           const SizedBox(height: 8),
-          _buildFila(Icons.local_fire_department_rounded,
+          buildFila(Icons.local_fire_department_rounded,
               'Calorías consumidas', '$cal kcal', const Color(0xFFFF6B6B)),
         ],
         if (agua != null) ...[
           const SizedBox(height: 8),
-          _buildFila(Icons.water_drop_rounded,
-              'Agua consumida', '$agua litros', _cAzul),
+          buildFila(Icons.water_drop_rounded,
+              'Agua consumida', '$agua litros', sheetAzul),
         ],
         if (notas.isNotEmpty) ...[
           const SizedBox(height: 8),
-          _buildFila(Icons.edit_note_rounded, 'Notas', notas, Colors.grey),
+          buildFila(Icons.edit_note_rounded, 'Notas', notas, Colors.grey),
         ],
       ]),
     );
   }
 
-  Widget _buildTarjeta({
+  Widget buildTarjeta({
     required Color color,
     required IconData icon,
     required String titulo,
@@ -717,16 +802,17 @@ class _DetalleDiaSheet extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.06),
+        color: color.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
             width: 32, height: 32,
             decoration: BoxDecoration(
-                color: color.withOpacity(0.15), shape: BoxShape.circle),
+                color: color.withValues(alpha: 0.15),
+                shape: BoxShape.circle),
             child: Icon(icon, color: color, size: 16),
           ),
           const SizedBox(width: 10),
@@ -740,7 +826,7 @@ class _DetalleDiaSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildSinActividad(IconData icon, String titulo, String mensaje) {
+  Widget buildSinActividad(IconData icon, String titulo, String mensaje) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -756,21 +842,26 @@ class _DetalleDiaSheet extends StatelessWidget {
           child: Icon(icon, color: Colors.grey[400], size: 16),
         ),
         const SizedBox(width: 10),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(titulo,
-              style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: Colors.grey[500])),
-          const SizedBox(height: 2),
-          Text(mensaje,
-              style: TextStyle(fontSize: 12, color: Colors.grey[400])),
-        ]),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(titulo,
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: Colors.grey[500])),
+              const SizedBox(height: 2),
+              Text(mensaje,
+                  style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+            ],
+          ),
+        ),
       ]),
     );
   }
 
-  Widget _buildFila(IconData icon, String label, String valor, Color color) {
+  Widget buildFila(IconData icon, String label, String valor, Color color) {
     return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Icon(icon, color: color, size: 15),
       const SizedBox(width: 8),
@@ -782,17 +873,17 @@ class _DetalleDiaSheet extends StatelessWidget {
               style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: _kDark)),
+                  color: sheetDark)),
         ]),
       ),
     ]);
   }
 }
 
-// ── Modelo helper ──────────────────────────────────────────────────────────
+// ── Modelo helper ──────────────────────────────────────────────────────────────
 class _NivelConfig {
   final String emoji;
   final String label;
-  final Color color;
+  final Color  color;
   const _NivelConfig(this.emoji, this.label, this.color);
 }

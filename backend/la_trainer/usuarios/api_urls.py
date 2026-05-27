@@ -1,12 +1,14 @@
 from django.urls import path
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 from . import api_views
 from . import ia_views
 
 urlpatterns = [
     # ─── Autenticación ───────────────────────────────────────
     path('registro/', api_views.RegistroAPIView.as_view(), name='api_registro'),
-    path('login/', TokenObtainPairView.as_view(), name='api_login'),
+    path('login/', api_views.LoginAPIView.as_view(), name='api_login'),
+    path('logout/', api_views.LogoutAPIView.as_view(), name='api_logout'),
+    path('avatares/', api_views.AvatarListAPIView.as_view(), name='api_avatares'),
     path('token/refresh/', TokenRefreshView.as_view(), name='api_token_refresh'),
 
     # ─── Perfil y onboarding ─────────────────────────────────
@@ -16,6 +18,7 @@ urlpatterns = [
     # ─── Ejercicios ──────────────────────────────────────────
     path('ejercicios/', api_views.EjercicioListAPIView.as_view(), name='api_ejercicios'),
     path('ejercicios/<int:pk>/', api_views.EjercicioDetalleAPIView.as_view(), name='api_ejercicio_detalle'),
+    path('ejercicios/<int:pk>/detalle/', api_views.DetalleEjercicioIAAPIView.as_view(), name='api_ejercicio_detalle_ia'),
 
     # ─── Planes entrenamiento (específicas antes de <pk>) ────
     path('planes/entrenamiento/', api_views.PlanEntrenamientoAPIView.as_view(), name='api_planes_entrenamiento'),
@@ -31,7 +34,7 @@ urlpatterns = [
     path('planes/alimentacion/<int:pk>/', api_views.PlanAlimentacionDetalleAPIView.as_view(), name='api_plan_alimentacion_detalle'),
     path('planes/alimentacion/<int:pk>/comidas/', api_views.RutinaComidaAPIView.as_view(), name='api_rutina_comida'),
 
-    # ─── Progreso ────────────────────────────────────────────
+    # ─── Progreso de peso corporal ───────────────────────────
     path('progreso/', api_views.ProgresoAPIView.as_view(), name='api_progreso'),
     path('progreso/<int:pk>/', api_views.ProgresoDetalleAPIView.as_view(), name='api_progreso_detalle'),
 
@@ -57,4 +60,24 @@ urlpatterns = [
     path('sesion/iniciar/', api_views.IniciarSesionAPIView.as_view(), name='api_sesion_iniciar'),
     path('sesion/activa/', api_views.SesionActivaAPIView.as_view(), name='api_sesion_activa'),
     path('sesion/<int:sesion_id>/ejercicio/<int:ejercicio_sesion_id>/completar/', api_views.CompletarEjercicioAPIView.as_view(), name='api_completar_ejercicio'),
+
+    # ─── NUEVO: Acceso y progreso ─────────────────────────────
+    # Llamar al abrir la app — registra acceso, actualiza racha, devuelve estado del día
+    path('acceso/', api_views.RegistrarAccesoAPIView.as_view(), name='api_acceso'),
+
+    # Dashboard de progreso completo (sin IA)
+    # Con análisis IA: GET /api/progreso/resumen/?ia=true
+    path('progreso/resumen/', api_views.ResumenProgresoAPIView.as_view(), name='api_progreso_resumen'),
+
+    # Calendario mensual de constancia
+    # GET /api/progreso/calendario/           → mes actual
+    # GET /api/progreso/calendario/?año=2025&mes=3  → mes específico
+    path('progreso/calendario/', api_views.CalendarioProgresoAPIView.as_view(), name='api_progreso_calendario'),
+
+    # Grafica de evolucion de peso
+    # GET /api/progreso/grafica/              → ultimos 30 dias
+    # GET /api/progreso/grafica/?vista=semanas → por semana
+    # GET /api/progreso/grafica/?vista=meses   → por mes
+    # GET /api/progreso/grafica/?vista=total   → desde el inicio
+    path('progreso/grafica/', api_views.GraficaProgresoAPIView.as_view(), name='api_progreso_grafica'),
 ]

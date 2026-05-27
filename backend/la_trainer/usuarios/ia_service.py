@@ -16,6 +16,58 @@ def _limpiar_json(texto):
     return texto.strip()
 
 
+
+def _buscar_imagen_ejercicio(nombre_ejercicio):
+    """
+    Busca la imagen de un ejercicio en la API pública de Wger.
+    Devuelve la URL de la imagen o cadena vacía si no encuentra.
+    """
+    import requests
+    try:
+        # Traducir términos comunes al inglés para mejor búsqueda
+        terminos = {
+            'press': 'press', 'sentadilla': 'squat', 'peso muerto': 'deadlift',
+            'dominada': 'pull-up', 'fondos': 'dip', 'plancha': 'plank',
+            'remo': 'row', 'curl': 'curl', 'extension': 'extension',
+            'elevacion': 'raise', 'aperturas': 'fly', 'burpee': 'burpee',
+            'zancada': 'lunge', 'hip thrust': 'hip thrust', 'crunch': 'crunch',
+        }
+        nombre_lower = nombre_ejercicio.lower()
+        termino_busqueda = nombre_ejercicio
+        for es, en in terminos.items():
+            if es in nombre_lower:
+                termino_busqueda = en
+                break
+
+        res = requests.get(
+            'https://wger.de/api/v2/exercise/',
+            params={
+                'format': 'json',
+                'language': 2,
+                'name': termino_busqueda,
+                'limit': 5,
+            },
+            timeout=5
+        )
+        if res.status_code == 200:
+            data = res.json()
+            if data.get('results'):
+                ejercicio_id = data['results'][0].get('exercise_base_id') or data['results'][0].get('id')
+                if ejercicio_id:
+                    img_res = requests.get(
+                        f'https://wger.de/api/v2/exerciseimage/',
+                        params={'format': 'json', 'exercise_base': ejercicio_id},
+                        timeout=5
+                    )
+                    if img_res.status_code == 200:
+                        imgs = img_res.json().get('results', [])
+                        if imgs:
+                            return imgs[0].get('image', '')
+    except Exception:
+        pass
+    return ''
+
+
 def generar_plan_entrenamiento(usuario):
     prompt = f"""
     Eres un entrenador personal experto. Genera un plan de entrenamiento personalizado en español.
@@ -52,7 +104,14 @@ def generar_plan_entrenamiento(usuario):
     }}
     """
     respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
-    return json.loads(_limpiar_json(respuesta.text))
+    resultado = json.loads(_limpiar_json(respuesta.text))
+
+    # Buscar imagen en Wger para cada ejercicio
+    for ejercicio in resultado.get('ejercicios', []):
+        imagen = _buscar_imagen_ejercicio(ejercicio.get('nombre', ''))
+        ejercicio['imagen_url'] = imagen
+
+    return resultado
 
 
 def generar_plan_alimentacion(usuario, plan_anterior=None):
@@ -134,7 +193,16 @@ def generar_plan_alimentacion(usuario, plan_anterior=None):
     }}
     """
     respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
-    return json.loads(_limpiar_json(respuesta.text))
+    resultado = json.loads(_limpiar_json(respuesta.text))
+
+    # Agregar imagen_url a cada comida usando Unsplash Source (sin API key)
+    # Flutter puede usar esta URL directamente con Image.network()
+    for comida in resultado.get('comidas', []):
+        nombre_comida = comida.get('nombre', '').replace(' ', '+')
+        # Unsplash Source devuelve imagen aleatoria de comida por query
+        comida['imagen_url'] = f'https://source.unsplash.com/400x300/?food,{nombre_comida}'
+
+    return resultado
 
 
 def analizar_progreso(usuario):
@@ -144,6 +212,38 @@ def analizar_progreso(usuario):
         for p in progresos
     ])
 
+    # Obtener grupos musculares trabajados en los ultimos 7 dias
+    from datetime import date, timedelta
+    from .models import RegistroAcceso
+    hace_7_dias = date.today() - timedelta(days=7)
+    registros_recientes = RegistroAcceso.objects.filter(
+        usuario=usuario,
+        fecha__gte=hace_7_dias,
+        entreno=True
+    ).exclude(grupos_musculares='')
+
+    grupos_semana = []
+    for r in registros_recientes:
+        if r.grupos_musculares:
+            grupos_semana.extend(r.grupos_musculares.split(', '))
+
+    from collections import Counter
+    conteo_grupos = Counter(grupos_semana)
+    grupos_mas_trabajados = ', '.join([f"{g} ({c}x)" for g, c in conteo_grupos.most_common()])
+    grupos_poco_trabajados = [g for g, c in conteo_grupos.items() if c == 1]
+
+    # Ultimas sesiones con grupos musculares
+    sesiones_recientes = RegistroAcceso.objects.filter(
+        usuario=usuario,
+        entreno=True,
+        fecha__gte=hace_7_dias
+    ).order_by('-fecha')[:7]
+
+    historial_sesiones = '\n'.join([
+        f"- {r.fecha}: grupos trabajados: {r.grupos_musculares or 'no registrado'}"
+        for r in sesiones_recientes
+    ])
+
     prompt = f"""
     Eres un entrenador personal experto. Analiza el progreso del usuario y ajusta su plan.
     
@@ -151,16 +251,24 @@ def analizar_progreso(usuario):
     - Nombre: {usuario.username}
     - Objetivo: {usuario.objetivo or 'No especificado'}
     
-    Historial de progreso:
-    {historial if historial else 'Sin registros aún'}
+    Historial de peso (ultimos registros):
+    {historial if historial else 'Sin registros de peso aun'}
     
-    Responde SOLO con un JSON válido con esta estructura exacta:
+    Sesiones de entrenamiento (ultimos 7 dias):
+    {historial_sesiones if historial_sesiones else 'Sin sesiones registradas'}
+    
+    Grupos musculares mas trabajados esta semana: {grupos_mas_trabajados or 'Ninguno aun'}
+    Grupos musculares poco trabajados: {', '.join(grupos_poco_trabajados) if grupos_poco_trabajados else 'Todos equilibrados'}
+    
+    Responde SOLO con un JSON valido con esta estructura exacta:
     {{
-        "analisis": "análisis detallado del progreso",
+        "analisis": "analisis detallado del progreso incluyendo equilibrio muscular",
         "esta_progresando": true,
-        "recomendacion": "recomendación principal",
-        "ajustes_plan": "ajustes sugeridos al plan de entrenamiento",
-        "ajustes_alimentacion": "ajustes sugeridos al plan de alimentación"
+        "recomendacion": "recomendacion principal",
+        "ajustes_plan": "ajustes sugeridos al plan de entrenamiento segun grupos musculares trabajados",
+        "ajustes_alimentacion": "ajustes sugeridos al plan de alimentacion",
+        "grupos_descansados": "grupos musculares que deben descansar hoy",
+        "grupos_sugeridos": "grupos musculares recomendados para entrenar hoy"
     }}
     """
     respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
@@ -223,6 +331,22 @@ def chat_coach(usuario, mensaje):
     - Nivel de estrés: {usuario.nivel_estres or 'No especificado'}
     """
 
+    # ── Obtener plan de alimentación activo para contexto ─────
+    plan_alimentacion_activo = usuario.planes_alimentacion.filter(activo=True).last()
+    info_plan_alimentacion = ''
+    if plan_alimentacion_activo:
+        comidas = plan_alimentacion_activo.rutina_comidas.all()
+        nombres_comidas = ', '.join([c.nombre for c in comidas])
+        info_plan_alimentacion = f"Plan de alimentación activo con estas comidas: {nombres_comidas}"
+
+    # ── Obtener plan de entrenamiento activo para contexto ────
+    plan_entrenamiento_activo = usuario.planes_entrenamiento.filter(activo=True).last()
+    info_plan_entrenamiento = ''
+    if plan_entrenamiento_activo:
+        ejercicios = plan_entrenamiento_activo.rutina_ejercicios.all()
+        nombres_ejercicios = ', '.join([f"{e.nombre} ({e.grupo_muscular})" for e in ejercicios])
+        info_plan_entrenamiento = f"Plan de entrenamiento activo con estos ejercicios: {nombres_ejercicios}"
+
     prompt = f"""
     Eres TrainerIA, un coach personal experto, empático y motivador.
     Responde en español de forma amigable y personalizada.
@@ -235,6 +359,9 @@ def chat_coach(usuario, mensaje):
     Historial de conversación:
     {contexto if contexto else 'Primera conversación'}
     
+    {info_plan_alimentacion if info_plan_alimentacion else 'El usuario no tiene plan de alimentación activo.'}
+    {info_plan_entrenamiento if info_plan_entrenamiento else 'El usuario no tiene plan de entrenamiento activo.'}
+    
     Campos del perfil que faltan completar:
     {', '.join(campos_faltantes) if campos_faltantes else 'Perfil completo'}
     
@@ -243,15 +370,28 @@ def chat_coach(usuario, mensaje):
     INSTRUCCIONES IMPORTANTES:
     1. Si el usuario quiere modificar algún dato de su perfil, dile que con gusto lo actualizas
        y responde con un JSON al final así: {{"actualizar_perfil": {{"campo": "valor"}}}}
-    2. Si hay campos faltantes y es una buena oportunidad, pregunta UNO solo de forma natural
-    3. Si el usuario menciona una condición médica, alergia o lesión nueva, actualiza su perfil
+    2. Si hay campos faltantes y es una buena oportunidad, pregunta UNO solo de forma natural.
+    3. Si el usuario menciona una condición médica, alergia o lesión nueva, actualiza su perfil.
     4. Responde de forma natural y motivadora. Máximo 3 párrafos.
-    5. Si el usuario pide un plan, primero verifica que tenga el perfil básico completo
+    5. Si el usuario pide un plan, primero verifica que tenga el perfil básico completo.
+    6. CRÍTICO: Si el usuario dice que NO le gusta, que no quiere, que le cae mal,
+       o que quiere evitar CUALQUIER alimento o comida del plan actual,
+       SIEMPRE debes regenerar el plan sin importar si es uno solo o varios alimentos.
+       Actualiza primero las alergias o restricciones del perfil si aplica, y responde con este JSON al final:
+       {{"regenerar_plan_alimentacion": true, "motivo": "razón del cambio"}}
+       NO preguntes si quiere cambiar el plan — hazlo directamente.
+    7. CRÍTICO: Si el usuario menciona que NO puede hacer, que le duele, que no le gusta,
+       o que quiere evitar CUALQUIER ejercicio específico o tipo de movimiento,
+       SIEMPRE debes regenerar el plan sin importar si es uno solo o varios ejercicios.
+       Actualiza primero las lesiones del perfil si aplica, y responde con este JSON al final:
+       {{"regenerar_plan_entrenamiento": true, "motivo": "razón del cambio"}}
+       NO preguntes si quiere cambiar el plan — hazlo directamente.
     """
 
     respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
     texto = respuesta.text.strip()
 
+    # ── Procesar actualización de perfil ──────────────────────
     if '"actualizar_perfil"' in texto:
         try:
             json_match = re.search(r'\{"actualizar_perfil":\s*\{[^}]+\}\}', texto)
@@ -263,6 +403,90 @@ def chat_coach(usuario, mensaje):
                         setattr(usuario, campo, valor)
                 usuario.save()
                 texto = texto[:json_match.start()].strip()
+        except Exception:
+            pass
+
+    # ── Procesar regeneración de plan de alimentación ─────────
+    if '"regenerar_plan_alimentacion"' in texto:
+        try:
+            json_match = re.search(r'\{"regenerar_plan_alimentacion":\s*true[^}]*\}', texto)
+            if json_match:
+                texto = texto[:json_match.start()].strip()
+
+                # Desactivar plan actual si existe
+                if plan_alimentacion_activo:
+                    plan_alimentacion_activo.activo = False
+                    plan_alimentacion_activo.completado = True
+                    plan_alimentacion_activo.save()
+
+                # Generar nuevo plan con las preferencias actualizadas
+                nuevo_plan_data = generar_plan_alimentacion(usuario)
+
+                from .models import PlanAlimentacion, RutinaComida
+                nuevo_plan = PlanAlimentacion.objects.create(
+                    usuario=usuario,
+                    calorias=nuevo_plan_data.get('calorias_diarias', 2000),
+                    objetivo=nuevo_plan_data.get('objetivo', ''),
+                    duracion_dias=nuevo_plan_data.get('duracion_dias', 30),
+                )
+                momento_map = {
+                    'desayuno': 'desayuno', 'almuerzo': 'almuerzo',
+                    'cena': 'cena', 'merienda': 'merienda', 'snack': 'merienda',
+                }
+                for index, comida in enumerate(nuevo_plan_data.get('comidas', [])):
+                    momento = comida.get('momento', 'Almuerzo').lower()
+                    RutinaComida.objects.create(
+                        plan=nuevo_plan,
+                        nombre=comida.get('nombre', ''),
+                        momento=momento_map.get(momento, 'merienda'),
+                        calorias=comida.get('calorias', 0),
+                        proteinas=comida.get('proteinas', 0),
+                        carbohidratos=comida.get('carbohidratos', 0),
+                        grasas=comida.get('grasas', 0),
+                        descripcion=comida.get('descripcion', ''),
+                        ingredientes=comida.get('ingredientes', ''),
+                        preparacion=comida.get('preparacion', ''),
+                        tiempo_preparacion=comida.get('tiempo_preparacion', 0),
+                        orden=index + 1
+                    )
+                texto += '\n\n✅ ¡Listo! Ya generé un nuevo plan de alimentación adaptado a tus preferencias.'
+        except Exception:
+            pass
+
+    # ── Procesar regeneración de plan de entrenamiento ────────
+    if '"regenerar_plan_entrenamiento"' in texto:
+        try:
+            json_match = re.search(r'\{"regenerar_plan_entrenamiento":\s*true[^}]*\}', texto)
+            if json_match:
+                texto = texto[:json_match.start()].strip()
+
+                # Desactivar plan actual si existe
+                if plan_entrenamiento_activo:
+                    plan_entrenamiento_activo.activo = False
+                    plan_entrenamiento_activo.completado = True
+                    plan_entrenamiento_activo.save()
+
+                # Generar nuevo plan con las limitaciones actualizadas
+                nuevo_plan_data = generar_plan_entrenamiento(usuario)
+
+                from .models import PlanEntrenamiento, RutinaEjercicio
+                nuevo_plan = PlanEntrenamiento.objects.create(
+                    usuario=usuario,
+                    tipo_entrenamiento=nuevo_plan_data.get('tipo_entrenamiento', ''),
+                    nivel=nuevo_plan_data.get('nivel', 'Principiante'),
+                    duracion=nuevo_plan_data.get('duracion', 4),
+                )
+                for index, ejercicio in enumerate(nuevo_plan_data.get('ejercicios', [])):
+                    RutinaEjercicio.objects.create(
+                        plan=nuevo_plan,
+                        nombre=ejercicio.get('nombre', ''),
+                        grupo_muscular=ejercicio.get('grupo_muscular', ''),
+                        series=ejercicio.get('series', 3),
+                        repeticiones=ejercicio.get('repeticiones', 10),
+                        descanso=ejercicio.get('descanso', '60 segundos'),
+                        orden=index + 1
+                    )
+                texto += '\n\n✅ ¡Listo! Ya generé un nuevo plan de entrenamiento adaptado a tus limitaciones.'
         except Exception:
             pass
 

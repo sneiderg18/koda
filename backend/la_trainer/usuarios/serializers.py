@@ -11,13 +11,19 @@ class RegistroSerializer(serializers.ModelSerializer):
     password1 = serializers.CharField(write_only=True, validators=[validate_password])
     password2 = serializers.CharField(write_only=True)
 
+    acepto_terminos = serializers.BooleanField(write_only=True)
+
     class Meta:
         model = Usuario
-        fields = ('email', 'username', 'password1', 'password2')
+        fields = ('email', 'username', 'password1', 'password2', 'acepto_terminos')
 
     def validate(self, data):
         if data['password1'] != data['password2']:
             raise serializers.ValidationError('Las contraseñas no coinciden.')
+        if not data.get('acepto_terminos'):
+            raise serializers.ValidationError(
+                'Debes aceptar los términos y condiciones para registrarte.'
+            )
         return data
 
     def validate_email(self, value):
@@ -26,11 +32,15 @@ class RegistroSerializer(serializers.ModelSerializer):
         return value.lower()
 
     def create(self, validated_data):
+        from django.utils import timezone
         usuario = Usuario.objects.create_user(
             email=validated_data['email'],
             username=validated_data['username'],
             password=validated_data['password1']
         )
+        usuario.acepto_terminos = True
+        usuario.fecha_acepto_terminos = timezone.now()
+        usuario.save(update_fields=['acepto_terminos', 'fecha_acepto_terminos'])
         return usuario
 
 
@@ -46,9 +56,10 @@ class UsuarioSerializer(serializers.ModelSerializer):
             'condiciones_medicas', 'alergias', 'lesiones',
             'restricciones_alimentarias',
             'comidas_por_dia', 'agua_por_dia', 'calidad_sueno', 'nivel_estres',
+            'avatar', 'acepto_terminos', 'fecha_acepto_terminos',
             'date_joined',
         )
-        read_only_fields = ('email', 'date_joined')
+        read_only_fields = ('email', 'date_joined', 'acepto_terminos', 'fecha_acepto_terminos')
 
 
 class EjercicioSerializer(serializers.ModelSerializer):

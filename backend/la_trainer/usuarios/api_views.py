@@ -1,4 +1,7 @@
-from rest_framework import generics, status
+from datetime import date, timedelta
+import calendar
+
+from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
@@ -7,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import (
     Ejercicio, PlanEntrenamiento, PlanAlimentacion, Progreso,
     Comida, RutinaEjercicio, RutinaComida, RegistroActividad, ProgresoAlimentacion,
-    SesionEntrenamiento, EjercicioSesion
+    SesionEntrenamiento, EjercicioSesion, RegistroAcceso
 )
 from .serializers import (
     RegistroSerializer, UsuarioSerializer, EjercicioSerializer,
@@ -17,6 +20,8 @@ from .serializers import (
     SesionEntrenamientoSerializer, EjercicioSesionSerializer
 )
 
+
+# ─── Autenticación ────────────────────────────────────────────
 
 class RegistroAPIView(APIView):
     permission_classes = [AllowAny]
@@ -34,6 +39,8 @@ class RegistroAPIView(APIView):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+# ─── Perfil ───────────────────────────────────────────────────
 
 class PerfilAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -53,6 +60,29 @@ class PerfilAPIView(APIView):
         request.user.delete()
         return Response({'mensaje': 'Cuenta eliminada correctamente.'}, status=status.HTTP_200_OK)
 
+
+# ─── Onboarding ───────────────────────────────────────────────
+
+class OnboardingAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.peso and request.user.altura:
+            return Response(
+                {'error': 'El perfil basico ya fue completado. Para hacer cambios habla con el coach.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        serializer = UsuarioSerializer(request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({
+                'mensaje': 'Perfil basico completado! El coach te hara algunas preguntas mas.',
+                'usuario': serializer.data
+            })
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ─── Ejercicios ───────────────────────────────────────────────
 
 class EjercicioListAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -103,6 +133,8 @@ class EjercicioDetalleAPIView(APIView):
         ejercicio.delete()
         return Response({'mensaje': 'Ejercicio eliminado correctamente.'}, status=status.HTTP_200_OK)
 
+
+# ─── Planes de entrenamiento ──────────────────────────────────
 
 class PlanEntrenamientoAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -210,7 +242,7 @@ class RutinaEjercicioAPIView(APIView):
             )
 
 
-# ─── Alimentación ─────────────────────────────────────────────
+# ─── Planes de alimentación ───────────────────────────────────
 
 class PlanAlimentacionAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -231,19 +263,15 @@ class PlanAlimentacionAPIView(APIView):
 class PlanAlimentacionActivoAPIView(APIView):
     """
     GET /api/planes/alimentacion/activo/
-
     Devuelve el plan activo con TODAS las comidas del dia (rutina_comidas),
     cada una con nombre, momento, macros, ingredientes, preparacion y
-    tiempo de preparacion. Equivalente a PlanActivoAPIView para ejercicios.
-
+    tiempo de preparacion.
     Tambien incluye el progreso del dia actual para que Flutter sepa
     si el usuario ya registro su alimentacion hoy.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from datetime import date
-
         plan = PlanAlimentacion.objects.filter(
             usuario=request.user, activo=True
         ).last()
@@ -266,7 +294,6 @@ class PlanAlimentacionActivoAPIView(APIView):
                 'mensaje': 'No tienes un plan de alimentacion activo. Genera uno desde /api/ia/plan/alimentacion/',
             })
 
-        # Verificar si ya registro cumplimiento hoy
         progreso_hoy = ProgresoAlimentacion.objects.filter(
             usuario=request.user, fecha=date.today()
         ).first()
@@ -274,14 +301,12 @@ class PlanAlimentacionActivoAPIView(APIView):
         return Response({
             'tiene_plan_activo': True,
             'plan': PlanAlimentacionSerializer(plan).data,
-            # Progreso del plan (igual que ejercicios)
             'dias_completados': plan.dias_completados,
             'duracion_dias': plan.duracion_dias,
             'dias_restantes': max(0, plan.duracion_dias - plan.dias_completados),
             'porcentaje_completado': round(
                 (plan.dias_completados / plan.duracion_dias * 100) if plan.duracion_dias > 0 else 0, 1
             ),
-            # Estado del dia — Flutter decide si mostrar boton de registro o el check de "ya listo hoy"
             'ya_registro_hoy': progreso_hoy is not None,
             'progreso_hoy': ProgresoAlimentacionSerializer(progreso_hoy).data if progreso_hoy else None,
         })
@@ -400,7 +425,7 @@ class ComidaDetalleAPIView(APIView):
         return Response({'mensaje': 'Comida eliminada correctamente.'}, status=status.HTTP_200_OK)
 
 
-# ─── Progreso de peso corporal ─────────────────────────────────
+# ─── Progreso de peso corporal ────────────────────────────────
 
 class ProgresoAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -443,27 +468,6 @@ class ProgresoDetalleAPIView(APIView):
             return Response({'error': 'Registro no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
         progreso.delete()
         return Response({'mensaje': 'Registro eliminado correctamente.'}, status=status.HTTP_200_OK)
-
-
-# ─── Onboarding ───────────────────────────────────────────────
-
-class OnboardingAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request):
-        if request.user.peso and request.user.altura:
-            return Response(
-                {'error': 'El perfil basico ya fue completado. Para hacer cambios habla con el coach.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        serializer = UsuarioSerializer(request.user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response({
-                'mensaje': 'Perfil basico completado! El coach te hara algunas preguntas mas.',
-                'usuario': serializer.data
-            })
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # ─── Completar sesion de entrenamiento (endpoint legacy) ──────
@@ -552,24 +556,23 @@ class RegistroActividadAPIView(APIView):
             sesion_numero=plan.sesiones_completadas + 1,
             notas=request.data.get('notas', '')
         )
+
         return Response(
             RegistroActividadSerializer(registro).data,
             status=status.HTTP_201_CREATED
         )
 
 
-# ─── Progreso de alimentacion ─────────────────────────────────
+# ─── Progreso de alimentación ─────────────────────────────────
 
 class ProgresoAlimentacionAPIView(APIView):
     """
     GET  /api/progreso/alimentacion/  → historial completo de cumplimiento diario
     POST /api/progreso/alimentacion/  → registrar cumplimiento del dia
 
-    El POST es el equivalente a completar un ejercicio en el flujo de entrenamiento:
-    - Asocia automaticamente al plan activo
-    - Actualiza dias_completados del plan
-    - Si llega a duracion_dias lo marca como completado (igual que sesiones en entrenamiento)
-    - Devuelve estado completo del plan para que Flutter muestre progreso sin calcular nada
+    El POST asocia automaticamente al plan activo, actualiza dias_completados,
+    y si llega a duracion_dias lo marca como completado.
+    Tambien actualiza el RegistroAcceso del dia para reflejar el cumplimiento.
     """
     permission_classes = [IsAuthenticated]
 
@@ -579,28 +582,34 @@ class ProgresoAlimentacionAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        from datetime import date
         from django.utils import timezone
 
-        # Un solo registro por dia
+        hoy = date.today()
+
         if ProgresoAlimentacion.objects.filter(
-            usuario=request.user, fecha=date.today()
+            usuario=request.user, fecha=hoy
         ).exists():
             return Response(
                 {'error': 'Ya registraste tu alimentacion de hoy. Usa PUT /api/progreso/alimentacion/<id>/ para editarlo.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Asociar automaticamente al plan de alimentacion activo
         plan_activo = PlanAlimentacion.objects.filter(
             usuario=request.user, activo=True
         ).last()
 
         serializer = ProgresoAlimentacionSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save(usuario=request.user, plan=plan_activo)
+            registro = serializer.save(usuario=request.user, plan=plan_activo)
 
-            # Calcular estado del plan para devolver en la respuesta
+            # Actualizar RegistroAcceso del dia para el calendario
+            registro_acceso, _ = RegistroAcceso.objects.get_or_create(
+                usuario=request.user, fecha=hoy
+            )
+            registro_acceso.cumplio_alimentacion = True
+            registro_acceso.nivel_alimentacion = registro.nivel_cumplimiento or ''
+            registro_acceso.save(update_fields=['cumplio_alimentacion', 'nivel_alimentacion'])
+
             plan_completado = False
             puede_generar_nuevo = False
             dias_completados = 0
@@ -621,8 +630,6 @@ class ProgresoAlimentacionAPIView(APIView):
                 )
 
                 if plan_activo.dias_completados >= plan_activo.duracion_dias:
-                    # Plan completado automaticamente — igual que cuando se completa
-                    # la ultima sesion de entrenamiento
                     plan_activo.completado = True
                     plan_activo.activo = False
                     plan_activo.fecha_completado = timezone.now()
@@ -645,7 +652,6 @@ class ProgresoAlimentacionAPIView(APIView):
             return Response({
                 'registro': serializer.data,
                 'mensaje': mensaje,
-                # Estado del plan — mismos campos que el flujo de ejercicios
                 'plan_completado': plan_completado,
                 'plan_activo': not plan_completado,
                 'puede_generar_nuevo': puede_generar_nuevo,
@@ -685,7 +691,16 @@ class ProgresoAlimentacionDetalleAPIView(APIView):
             )
         serializer = ProgresoAlimentacionSerializer(registro, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            registro_actualizado = serializer.save()
+
+            # Sincronizar nivel en RegistroAcceso si cambió
+            try:
+                ra = RegistroAcceso.objects.get(usuario=request.user, fecha=registro.fecha)
+                ra.nivel_alimentacion = registro_actualizado.nivel_cumplimiento or ''
+                ra.save(update_fields=['nivel_alimentacion'])
+            except RegistroAcceso.DoesNotExist:
+                pass
+
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -700,7 +715,7 @@ class ProgresoAlimentacionDetalleAPIView(APIView):
         return Response({'mensaje': 'Registro eliminado correctamente.'}, status=status.HTTP_200_OK)
 
 
-# ─── Sesion de entrenamiento en tiempo real ───────────────────
+# ─── Sesión de entrenamiento en tiempo real ───────────────────
 
 class IniciarSesionAPIView(APIView):
     """
@@ -744,6 +759,27 @@ class IniciarSesionAPIView(APIView):
                 'es_sesion_nueva': False,
             }, status=status.HTTP_200_OK)
 
+        # ── Verificar si ya completó una sesión HOY ────────────
+        # Evita que el usuario haga dos sesiones el mismo día
+        sesion_hoy = SesionEntrenamiento.objects.filter(
+            usuario=request.user,
+            plan=plan,
+            completada=True,
+            fecha_inicio__date=date.today()
+        ).exists()
+
+        if sesion_hoy:
+            dias_semana = request.user.dias_entrenamiento or 3
+            sesiones_totales = plan.duracion * dias_semana
+            return Response({
+                'mensaje': 'Ya completaste tu sesión de hoy. ¡Excelente trabajo! Vuelve mañana para continuar.',
+                'sesion_completada_hoy': True,
+                'puede_entrenar_hoy': False,
+                'sesiones_completadas': plan.sesiones_completadas,
+                'sesiones_totales': sesiones_totales,
+                'sesiones_restantes': max(0, sesiones_totales - plan.sesiones_completadas),
+            }, status=status.HTTP_200_OK)
+
         dias_semana = request.user.dias_entrenamiento or 3
         sesiones_totales = plan.duracion * dias_semana
         sesion_numero = plan.sesiones_completadas + 1
@@ -753,7 +789,13 @@ class IniciarSesionAPIView(APIView):
             plan=plan,
         )
 
-        for ejercicio in plan.rutina_ejercicios.all():
+        # ── Selección de ejercicios por sesión ────────────────
+        # Todos los ejercicios del plan se muestran en la sesión.
+        # La IA ya generó el plan con los ejercicios correctos para el usuario.
+        todos_ejercicios = list(plan.rutina_ejercicios.all())
+        ejercicios_hoy = todos_ejercicios
+
+        for ejercicio in ejercicios_hoy:
             EjercicioSesion.objects.create(
                 sesion=sesion,
                 rutina_ejercicio=ejercicio,
@@ -772,6 +814,8 @@ class IniciarSesionAPIView(APIView):
 class CompletarEjercicioAPIView(APIView):
     """
     POST /api/sesion/<sesion_id>/ejercicio/<ejercicio_sesion_id>/completar/
+    Marca un ejercicio como completado. Cuando se completa el último,
+    cierra la sesión, actualiza el plan y actualiza el RegistroAcceso del día.
     """
     permission_classes = [IsAuthenticated]
 
@@ -835,6 +879,25 @@ class CompletarEjercicioAPIView(APIView):
             dias_semana = request.user.dias_entrenamiento or 3
             sesiones_totales = plan.duracion * dias_semana
             plan.sesiones_completadas += 1
+
+            # Actualizar RegistroAcceso del día — marcar que entrenó
+            hoy = date.today()
+            registro_acceso, _ = RegistroAcceso.objects.get_or_create(
+                usuario=request.user, fecha=hoy
+            )
+            registro_acceso.entreno = True
+
+            # Guardar grupos musculares trabajados en la sesion
+            ejercicios_completados = sesion.ejercicios_completados.filter(completado=True)
+            grupos = list(set([
+                e.rutina_ejercicio.grupo_muscular
+                for e in ejercicios_completados
+                if e.rutina_ejercicio.grupo_muscular
+            ]))
+            if grupos:
+                registro_acceso.grupos_musculares = ', '.join(grupos)
+
+            registro_acceso.save(update_fields=['entreno', 'grupos_musculares'])
 
             if plan.sesiones_completadas >= sesiones_totales:
                 plan.completado = True
@@ -940,6 +1003,341 @@ class SesionActivaAPIView(APIView):
         })
 
 
+# ─── PROGRESO COMPLETO Y CALENDARIO ──────────────────────────
+
+class RegistrarAccesoAPIView(APIView):
+    """
+    POST /api/acceso/
+    Llamar cada vez que el usuario abre la app.
+    - Crea o recupera el RegistroAcceso del día
+    - Actualiza la racha del usuario (idempotente: no hace nada si ya se llamó hoy)
+    - Devuelve el estado completo del día para que Flutter decida qué mostrar
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        hoy = date.today()
+        usuario = request.user
+
+        es_nuevo_acceso = usuario.registrar_acceso_hoy()
+
+        registro_acceso, _ = RegistroAcceso.objects.get_or_create(
+            usuario=usuario,
+            fecha=hoy
+        )
+
+        sesion_hoy = usuario.sesiones.filter(
+            fecha_inicio__date=hoy,
+            completada=True
+        ).exists()
+
+        alim_hoy = usuario.progreso_alimentacion.filter(fecha=hoy).first()
+
+        # ── Recalcular racha desde RegistroAcceso por si está desincronizada ──
+        # Corrige perfiles donde la racha muestra 0 aunque hayan tenido actividad
+        racha_actual, racha_maxima = _recalcular_racha(usuario)
+        if racha_actual != usuario.racha_actual or racha_maxima != usuario.racha_maxima:
+            usuario.racha_actual = racha_actual
+            usuario.racha_maxima = racha_maxima
+            usuario.save(update_fields=['racha_actual', 'racha_maxima'])
+
+        dias_inactivos = _calcular_dias_inactivos(usuario)
+
+        return Response({
+            'es_nuevo_acceso': es_nuevo_acceso,
+            'fecha': hoy,
+            'racha_actual': usuario.racha_actual,
+            'racha_maxima': usuario.racha_maxima,
+            'dias_inactivos': dias_inactivos,
+            'entreno_hoy': sesion_hoy,
+            'registro_alim_hoy': alim_hoy.nivel_cumplimiento if alim_hoy else None,
+            'cumplio_alimentacion_hoy': alim_hoy is not None,
+        })
+
+
+class CalendarioProgresoAPIView(APIView):
+    """
+    GET /api/progreso/calendario/                       → mes actual
+    GET /api/progreso/calendario/?año=2025&mes=3        → mes específico
+
+    Devuelve el mapa de actividad del mes: cada día tiene
+    abrio_app / entreno / cumplio_alimentacion / nivel_alimentacion.
+    Incluye estadísticas del mes y racha actual.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        hoy = date.today()
+        try:
+            anio = int(request.query_params.get('año', hoy.year))
+            mes = int(request.query_params.get('mes', hoy.month))
+            if not (1 <= mes <= 12) or not (2020 <= anio <= 2100):
+                raise ValueError
+        except (ValueError, TypeError):
+            return Response(
+                {'error': 'Parámetros año y mes inválidos.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        primer_dia = date(anio, mes, 1)
+        ultimo_dia = date(anio, mes, calendar.monthrange(anio, mes)[1])
+
+        # Registros de acceso del mes indexados por fecha
+        accesos = {
+            r.fecha: r
+            for r in RegistroAcceso.objects.filter(
+                usuario=request.user,
+                fecha__range=(primer_dia, ultimo_dia)
+            )
+        }
+
+        # Fechas con sesión completada en el mes
+        sesiones_mes = set(
+            SesionEntrenamiento.objects.filter(
+                usuario=request.user,
+                completada=True,
+                fecha_inicio__date__range=(primer_dia, ultimo_dia)
+            ).values_list('fecha_inicio__date', flat=True)
+        )
+
+        # Cumplimiento de alimentación del mes indexado por fecha
+        alim_mes = {
+            p.fecha: p.nivel_cumplimiento
+            for p in request.user.progreso_alimentacion.filter(
+                fecha__range=(primer_dia, ultimo_dia)
+            )
+        }
+
+        dias = []
+        dia_actual = primer_dia
+        while dia_actual <= ultimo_dia:
+            acceso = accesos.get(dia_actual)
+            entreno = dia_actual in sesiones_mes
+            nivel_alim = alim_mes.get(dia_actual, '')
+
+            # Sincronizar RegistroAcceso si hay actividad no registrada aún
+            if acceso and (entreno != acceso.entreno or bool(nivel_alim) != acceso.cumplio_alimentacion):
+                acceso.entreno = entreno
+                acceso.cumplio_alimentacion = bool(nivel_alim)
+                acceso.nivel_alimentacion = nivel_alim
+                acceso.save(update_fields=['entreno', 'cumplio_alimentacion', 'nivel_alimentacion'])
+
+            dias.append({
+                'fecha': dia_actual.isoformat(),
+                'abrio_app': acceso is not None,
+                'entreno': entreno,
+                'cumplio_alimentacion': bool(nivel_alim),
+                'nivel_alimentacion': nivel_alim,
+                'grupos_musculares': acceso.grupos_musculares.split(', ') if acceso and acceso.grupos_musculares else [],
+                'es_futuro': dia_actual > hoy,
+                'es_hoy': dia_actual == hoy,
+            })
+            dia_actual += timedelta(days=1)
+
+        dias_con_acceso = sum(1 for d in dias if d['abrio_app'] and not d['es_futuro'])
+        dias_entrenados = sum(1 for d in dias if d['entreno'])
+        dias_alim_ok = sum(1 for d in dias if d['cumplio_alimentacion'])
+        dias_transcurridos = (min(hoy, ultimo_dia) - primer_dia).days + 1
+
+        return Response({
+            'año': anio,
+            'mes': mes,
+            'dias': dias,
+            'estadisticas_mes': {
+                'dias_transcurridos': dias_transcurridos,
+                'dias_con_acceso': dias_con_acceso,
+                'dias_entrenados': dias_entrenados,
+                'dias_alim_cumplidos': dias_alim_ok,
+                'porcentaje_constancia': round(
+                    dias_con_acceso / dias_transcurridos * 100, 1
+                ) if dias_transcurridos > 0 else 0,
+                'porcentaje_entrenamiento': round(
+                    dias_entrenados / dias_transcurridos * 100, 1
+                ) if dias_transcurridos > 0 else 0,
+                'porcentaje_alimentacion': round(
+                    dias_alim_ok / dias_transcurridos * 100, 1
+                ) if dias_transcurridos > 0 else 0,
+            },
+            'racha_actual': request.user.racha_actual,
+            'racha_maxima': request.user.racha_maxima,
+        })
+
+
+class ResumenProgresoAPIView(APIView):
+    """
+    GET /api/progreso/resumen/          → dashboard completo sin IA
+    GET /api/progreso/resumen/?ia=true  → igual + análisis de la IA
+
+    Un solo endpoint que Flutter consume para pintar toda la pantalla
+    de progreso: racha, planes activos, historial de peso, sesiones
+    recientes, cumplimiento de alimentación y análisis IA opcional.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from . import ia_service
+
+        usuario = request.user
+        hoy = date.today()
+        hace_7_dias = hoy - timedelta(days=7)
+
+        # ── Planes activos ────────────────────────────────────
+        plan_entreno = usuario.planes_entrenamiento.filter(activo=True).last()
+        plan_alim = usuario.planes_alimentacion.filter(activo=True).last()
+
+        estado_entrenamiento = None
+        if plan_entreno:
+            dias_semana = usuario.dias_entrenamiento or 3
+            sesiones_totales = plan_entreno.duracion * dias_semana
+            estado_entrenamiento = {
+                'plan_id': plan_entreno.pk,
+                'tipo': plan_entreno.tipo_entrenamiento,
+                'nivel': plan_entreno.nivel,
+                'sesiones_completadas': plan_entreno.sesiones_completadas,
+                'sesiones_totales': sesiones_totales,
+                'porcentaje': round(
+                    plan_entreno.sesiones_completadas / sesiones_totales * 100, 1
+                ) if sesiones_totales else 0,
+            }
+
+        estado_alimentacion = None
+        if plan_alim:
+            estado_alimentacion = {
+                'plan_id': plan_alim.pk,
+                'calorias': plan_alim.calorias,
+                'dias_completados': plan_alim.dias_completados,
+                'duracion_dias': plan_alim.duracion_dias,
+                'porcentaje': round(
+                    plan_alim.dias_completados / plan_alim.duracion_dias * 100, 1
+                ) if plan_alim.duracion_dias else 0,
+            }
+
+        # ── Historial de peso ─────────────────────────────────
+        progresos_peso = list(
+            usuario.progresos.values('fecha', 'peso', 'observaciones')[:10]
+        )
+
+        # ── Últimas 7 sesiones completadas ────────────────────
+        sesiones_recientes = []
+        for s in SesionEntrenamiento.objects.filter(
+            usuario=usuario,
+            completada=True,
+            fecha_inicio__date__gte=hace_7_dias
+        ).order_by('-fecha_inicio')[:7]:
+            total = s.ejercicios_completados.count()
+            hechos = s.ejercicios_completados.filter(completado=True).count()
+            # Obtener grupos musculares trabajados en esta sesion
+            grupos = list(set([
+                e.rutina_ejercicio.grupo_muscular
+                for e in s.ejercicios_completados.filter(completado=True)
+                if e.rutina_ejercicio.grupo_muscular
+            ]))
+            sesiones_recientes.append({
+                'fecha': s.fecha_inicio.date().isoformat(),
+                'ejercicios_completados': hechos,
+                'ejercicios_totales': total,
+                'porcentaje': round(hechos / total * 100, 1) if total else 0,
+                'grupos_musculares': grupos,
+            })
+
+        # ── Cumplimiento de alimentación últimos 7 días ───────
+        alim_reciente = list(
+            usuario.progreso_alimentacion.filter(
+                fecha__gte=hace_7_dias
+            ).values('fecha', 'nivel_cumplimiento', 'calorias_consumidas', 'agua_consumida')[:7]
+        )
+
+        # ── Análisis IA (solo si ?ia=true) ────────────────────
+        analisis_ia = None
+        if request.query_params.get('ia', '').lower() == 'true':
+            try:
+                analisis_ia = ia_service.analizar_progreso(usuario)
+                from .models import Conversacion
+                Conversacion.objects.create(
+                    usuario=usuario,
+                    tipo='seguimiento',
+                    mensaje_usuario='Analizar progreso completo',
+                    respuesta_ia=str(analisis_ia)
+                )
+            except Exception as e:
+                analisis_ia = {'error': str(e)}
+
+        return Response({
+            'racha_actual': usuario.racha_actual,
+            'racha_maxima': usuario.racha_maxima,
+            'ultimo_acceso': usuario.ultimo_acceso,
+            'estado_entrenamiento': estado_entrenamiento,
+            'estado_alimentacion': estado_alimentacion,
+            'historial_peso': progresos_peso,
+            'sesiones_recientes': sesiones_recientes,
+            'cumplimiento_alimentacion_reciente': alim_reciente,
+            'analisis_ia': analisis_ia,
+        })
+
+
+# ─── Utilidad interna ─────────────────────────────────────────
+
+def _recalcular_racha(usuario):
+    from datetime import timedelta as td
+
+    hoy = date.today()
+    accesos = list(
+        RegistroAcceso.objects.filter(usuario=usuario)
+        .order_by('-fecha')
+        .values_list('fecha', flat=True)
+    )
+
+    # Usuario nuevo o sin accesos previos — primer acceso = racha 1
+    if not accesos:
+        return 1, max(1, usuario.racha_maxima)
+
+    # Racha actual: contar desde hoy hacia atras en dias consecutivos
+    racha_actual = 0
+    racha_maxima = usuario.racha_maxima
+    fecha_esperada = hoy
+
+    for fecha in accesos:
+        if fecha == fecha_esperada:
+            racha_actual += 1
+            fecha_esperada = fecha - td(days=1)
+        elif fecha < fecha_esperada:
+            break
+
+    # Garantizar minimo 1 si hay acceso hoy (usuario que regresa despues de inactividad)
+    if racha_actual == 0 and accesos and accesos[0] == hoy:
+        racha_actual = 1
+
+    # Si no hay acceso hoy ni ayer, la racha se rompio — vuelve a 1 al reingresar
+    # Esto se maneja en registrar_acceso_hoy() del modelo
+
+    # Racha maxima historica: recorrer todos los accesos
+    racha_temp = 1
+    for i in range(1, len(accesos)):
+        diff = (accesos[i - 1] - accesos[i]).days
+        if diff == 1:
+            racha_temp += 1
+            if racha_temp > racha_maxima:
+                racha_maxima = racha_temp
+        else:
+            racha_temp = 1
+
+    racha_maxima = max(racha_maxima, racha_actual)
+    return racha_actual, racha_maxima
+
+
+def _calcular_dias_inactivos(usuario):
+    """
+    Calcula los dias que el usuario NO ha ingresado a la app
+    desde su registro hasta hoy.
+    """
+    hoy = date.today()
+    fecha_registro = usuario.date_joined.date()
+    total_dias = (hoy - fecha_registro).days + 1
+
+    dias_activos = RegistroAcceso.objects.filter(usuario=usuario).count()
+    return max(0, total_dias - dias_activos)
+
+
 def _parsear_descanso(descanso_str):
     """
     Convierte el texto de descanso de la IA a segundos para el timer de Flutter.
@@ -953,4 +1351,325 @@ def _parsear_descanso(descanso_str):
     valor = int(numeros[0])
     if 'min' in texto:
         return valor * 60
-    return valor
+
+
+
+
+# ─── Detalle ejercicio con IA ─────────────────────────────────
+
+class DetalleEjercicioIAAPIView(APIView):
+    """
+    GET /api/ejercicios/<pk>/detalle/
+    Genera descripción y técnica del ejercicio usando IA.
+    Guarda el resultado en descripcion_ia para no volver a llamar a Gemini
+    si ya fue generado antes (cache en BD).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        from .models import RutinaEjercicio
+        from . import ia_service
+
+        try:
+            ejercicio = RutinaEjercicio.objects.get(pk=pk, plan__usuario=request.user)
+        except RutinaEjercicio.DoesNotExist:
+            return Response(
+                {'error': 'Ejercicio no encontrado.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Si ya tiene descripción generada, devolverla sin llamar a Gemini
+        if ejercicio.descripcion_ia:
+            try:
+                import json
+                detalle = json.loads(ejercicio.descripcion_ia)
+                return Response({**detalle, 'desde_cache': True})
+            except Exception:
+                pass
+
+        # Generar con IA
+        try:
+            detalle = ia_service.generar_descripcion_ejercicio(
+                ejercicio.nombre,
+                ejercicio.grupo_muscular
+            )
+            # Guardar en BD para no volver a generarlo
+            import json
+            ejercicio.descripcion_ia = json.dumps(detalle, ensure_ascii=False)
+            ejercicio.save(update_fields=['descripcion_ia'])
+
+            return Response({**detalle, 'desde_cache': False})
+
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# ─── Avatares predeterminados ─────────────────────────────────
+
+
+class GraficaProgresoAPIView(APIView):
+    """
+    GET /api/progreso/grafica/
+    Devuelve la evolucion de peso del usuario en 3 vistas:
+    - ?vista=dias     → ultimos 30 dias (default)
+    - ?vista=semanas  → agrupado por semana
+    - ?vista=meses    → agrupado por mes
+    - ?vista=total    → desde el registro hasta hoy
+
+    Cada punto tiene: fecha, peso, etiqueta
+    Tambien devuelve: peso_inicial, peso_actual, diferencia, tendencia
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from .models import Progreso
+        from datetime import timedelta
+        from collections import defaultdict
+
+        usuario = request.user
+        vista = request.query_params.get('vista', 'dias')
+
+        # Todos los registros de peso ordenados por fecha
+        progresos = Progreso.objects.filter(
+            usuario=usuario
+        ).order_by('fecha').values('fecha', 'peso')
+
+        if not progresos:
+            return Response({
+                'vista': vista,
+                'puntos': [],
+                'peso_inicial': usuario.peso,
+                'peso_actual': usuario.peso,
+                'diferencia': 0,
+                'tendencia': 'sin_datos',
+                'mensaje': 'Aun no tienes registros de peso. Registra tu peso periodicamente para ver tu progreso.',
+            })
+
+        progresos = list(progresos)
+        peso_inicial = progresos[0]['peso']
+        peso_actual = progresos[-1]['peso']
+        diferencia = round(peso_actual - peso_inicial, 2)
+        tendencia = 'bajando' if diferencia < 0 else 'subiendo' if diferencia > 0 else 'estable'
+
+        hoy = date.today()
+        puntos = []
+
+        if vista == 'dias':
+            # Ultimos 30 dias — un punto por dia con registro
+            hace_30 = hoy - timedelta(days=30)
+            puntos = [
+                {
+                    'fecha': p['fecha'].isoformat(),
+                    'peso': p['peso'],
+                    'etiqueta': p['fecha'].strftime('%d/%m'),
+                }
+                for p in progresos
+                if p['fecha'] >= hace_30
+            ]
+
+        elif vista == 'semanas':
+            # Agrupar por semana — promedio de peso por semana
+            semanas = defaultdict(list)
+            for p in progresos:
+                # Lunes de la semana como clave
+                lunes = p['fecha'] - timedelta(days=p['fecha'].weekday())
+                semanas[lunes].append(p['peso'])
+
+            for lunes, pesos in sorted(semanas.items()):
+                promedio = round(sum(pesos) / len(pesos), 2)
+                domingo = lunes + timedelta(days=6)
+                puntos.append({
+                    'fecha': lunes.isoformat(),
+                    'peso': promedio,
+                    'etiqueta': f"{lunes.strftime('%d/%m')} - {domingo.strftime('%d/%m')}",
+                    'registros': len(pesos),
+                })
+
+        elif vista == 'meses':
+            # Agrupar por mes — promedio de peso por mes
+            meses = defaultdict(list)
+            for p in progresos:
+                clave = p['fecha'].strftime('%Y-%m')
+                meses[clave].append(p['peso'])
+
+            meses_nombres = {
+                '01': 'Ene', '02': 'Feb', '03': 'Mar', '04': 'Abr',
+                '05': 'May', '06': 'Jun', '07': 'Jul', '08': 'Ago',
+                '09': 'Sep', '10': 'Oct', '11': 'Nov', '12': 'Dic',
+            }
+            for clave, pesos in sorted(meses.items()):
+                anio, mes = clave.split('-')
+                promedio = round(sum(pesos) / len(pesos), 2)
+                puntos.append({
+                    'fecha': f"{clave}-01",
+                    'peso': promedio,
+                    'etiqueta': f"{meses_nombres[mes]} {anio}",
+                    'registros': len(pesos),
+                })
+
+        elif vista == 'total':
+            # Todos los registros desde el inicio
+            puntos = [
+                {
+                    'fecha': p['fecha'].isoformat(),
+                    'peso': p['peso'],
+                    'etiqueta': p['fecha'].strftime('%d/%m/%Y'),
+                }
+                for p in progresos
+            ]
+
+        # Peso objetivo si lo tiene en el perfil
+        objetivo_peso = None
+        if usuario.objetivo == 'bajar_peso' and usuario.peso:
+            objetivo_peso = round(usuario.peso * 0.9, 1)
+        elif usuario.objetivo == 'aumentar_masa' and usuario.peso:
+            objetivo_peso = round(usuario.peso * 1.05, 1)
+
+        return Response({
+            'vista': vista,
+            'puntos': puntos,
+            'peso_inicial': peso_inicial,
+            'peso_actual': peso_actual,
+            'diferencia': diferencia,
+            'tendencia': tendencia,
+            'objetivo_peso': objetivo_peso,
+            'total_registros': len(progresos),
+        })
+
+
+class AvatarListAPIView(APIView):
+    """
+    GET /api/avatares/
+    Devuelve la lista de avatares disponibles para que Flutter los muestre.
+    El usuario elige uno y lo guarda con PUT /api/perfil/ -> {avatar: 'avatar_1'}
+    """
+    permission_classes = [IsAuthenticated]
+
+    AVATARES = [
+        {
+            'id': 'avatar_1',
+            'nombre': 'Corredor',
+            'descripcion': 'Para los amantes del cardio y las carreras',
+            'emoji': '🏃',
+        },
+        {
+            'id': 'avatar_2',
+            'nombre': 'Levantador',
+            'descripcion': 'Para los que van al gimnasio a levantar pesas',
+            'emoji': '🏋️',
+        },
+        {
+            'id': 'avatar_3',
+            'nombre': 'Yogui',
+            'descripcion': 'Para los amantes del yoga y la flexibilidad',
+            'emoji': '🧘',
+        },
+        {
+            'id': 'avatar_4',
+            'nombre': 'Ciclista',
+            'descripcion': 'Para los que disfrutan el ciclismo',
+            'emoji': '🚴',
+        },
+        {
+            'id': 'avatar_5',
+            'nombre': 'Nadador',
+            'descripcion': 'Para los que entrenan en la piscina',
+            'emoji': '🏊',
+        },
+        {
+            'id': 'avatar_6',
+            'nombre': 'Boxeador',
+            'descripcion': 'Para los que entrenan artes marciales o boxeo',
+            'emoji': '🥊',
+        },
+        {
+            'id': 'avatar_7',
+            'nombre': 'Escalador',
+            'descripcion': 'Para los amantes de la escalada y el outdoor',
+            'emoji': '🧗',
+        },
+        {
+            'id': 'avatar_8',
+            'nombre': 'Bailarín',
+            'descripcion': 'Para los que entrenan con baile o zumba',
+            'emoji': '💃',
+        },
+    ]
+
+    def get(self, request):
+        avatar_actual = request.user.avatar or 'avatar_1'
+        avatares = []
+        for av in self.AVATARES:
+            avatares.append({
+                **av,
+                'seleccionado': av['id'] == avatar_actual,
+            })
+        return Response({
+            'avatar_actual': avatar_actual,
+            'avatares': avatares,
+        })
+
+
+# ─── Logout con blacklist JWT ─────────────────────────────────
+
+class LogoutAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data.get('refresh')
+            if not refresh_token:
+                return Response(
+                    {'error': 'Se requiere el refresh token.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(
+                {'mensaje': 'Sesión cerrada correctamente.'},
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {'error': 'Token inválido o ya fue invalidado.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+# ─── Rate limiting — throttle personalizado para login ────────
+
+from rest_framework.throttling import AnonRateThrottle
+
+class LoginRateThrottle(AnonRateThrottle):
+    rate = '5/minute'
+    scope = 'login'
+
+
+class LoginAPIView(APIView):
+    """
+    Login con rate limiting — máximo 5 intentos por minuto por IP.
+    Reemplaza a TokenObtainPairView en api_urls.py.
+    Acepta email + password y devuelve access + refresh tokens.
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
+
+    def post(self, request):
+        from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+        from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+
+        serializer = TokenObtainPairSerializer(data=request.data)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as e:
+            raise InvalidToken(e.args[0])
+        except Exception:
+            return Response(
+                {'error': 'Correo o contraseña incorrectos.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
