@@ -1,10 +1,31 @@
 import os
 import json
 import re
+import time
 from google import genai
 
 cliente = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
 MODELO = 'gemini-2.5-flash'
+
+
+def _llamar_gemini(prompt, max_reintentos=3):
+    """
+    Llama a Gemini con reintentos automaticos si hay error 503.
+    Espera 2, 4, 8 segundos entre intentos (backoff exponencial).
+    """
+    for intento in range(max_reintentos):
+        try:
+            respuesta = _llamar_gemini(prompt)
+            return respuesta
+        except Exception as e:
+            error_str = str(e)
+            if '503' in error_str or 'UNAVAILABLE' in error_str or 'high demand' in error_str:
+                if intento < max_reintentos - 1:
+                    espera = 2 ** (intento + 1)  # 2, 4, 8 segundos
+                    time.sleep(espera)
+                    continue
+            raise  # Si no es 503 o ya agotamos reintentos, relanzar el error
+    raise Exception('Gemini no disponible despues de varios intentos. Intenta de nuevo en unos minutos.')
 
 
 def _limpiar_json(texto):
@@ -103,7 +124,7 @@ def generar_plan_entrenamiento(usuario):
         ]
     }}
     """
-    respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
+    respuesta = _llamar_gemini(prompt)
     resultado = json.loads(_limpiar_json(respuesta.text))
 
     # Buscar imagen en Wger para cada ejercicio
@@ -192,7 +213,7 @@ def generar_plan_alimentacion(usuario, plan_anterior=None):
         ]
     }}
     """
-    respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
+    respuesta = _llamar_gemini(prompt)
     resultado = json.loads(_limpiar_json(respuesta.text))
 
     # Agregar imagen_url a cada comida usando Unsplash Source (sin API key)
@@ -271,7 +292,7 @@ def analizar_progreso(usuario):
         "grupos_sugeridos": "grupos musculares recomendados para entrenar hoy"
     }}
     """
-    respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
+    respuesta = _llamar_gemini(prompt)
     return json.loads(_limpiar_json(respuesta.text))
 
 
@@ -393,7 +414,7 @@ def chat_coach(usuario, mensaje):
        NO preguntes si quiere cambiar el plan — hazlo directamente.
     """
 
-    respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
+    respuesta = _llamar_gemini(prompt)
     texto = respuesta.text.strip()
 
     # ── Procesar actualización de perfil ──────────────────────
@@ -518,5 +539,5 @@ def generar_descripcion_ejercicio(nombre, grupo_muscular):
         "variaciones": "variaciones del ejercicio"
     }}
     """
-    respuesta = cliente.models.generate_content(model=MODELO, contents=prompt)
+    respuesta = _llamar_gemini(prompt)
     return json.loads(_limpiar_json(respuesta.text))
