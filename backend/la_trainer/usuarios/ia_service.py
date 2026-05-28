@@ -13,19 +13,20 @@ def _llamar_gemini(prompt, max_reintentos=3):
     Llama a Gemini con reintentos automaticos si hay error 503.
     Espera 2, 4, 8 segundos entre intentos (backoff exponencial).
     """
+    ultimo_error = None
     for intento in range(max_reintentos):
         try:
-            respuesta = _llamar_gemini(prompt)
-            return respuesta
+            return cliente.models.generate_content(model=MODELO, contents=prompt)
         except Exception as e:
+            ultimo_error = e
             error_str = str(e)
             if '503' in error_str or 'UNAVAILABLE' in error_str or 'high demand' in error_str:
                 if intento < max_reintentos - 1:
-                    espera = 2 ** (intento + 1)  # 2, 4, 8 segundos
+                    espera = 2 ** (intento + 1)
                     time.sleep(espera)
                     continue
-            raise  # Si no es 503 o ya agotamos reintentos, relanzar el error
-    raise Exception('Gemini no disponible despues de varios intentos. Intenta de nuevo en unos minutos.')
+            raise
+    raise ultimo_error
 
 
 def _limpiar_json(texto):
