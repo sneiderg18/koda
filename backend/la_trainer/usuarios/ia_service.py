@@ -276,10 +276,15 @@ def analizar_progreso(usuario):
 
 
 def chat_coach(usuario, mensaje):
-    historial = usuario.conversaciones.filter(tipo='coach')[:5]
+    # Traer las ultimas 10 conversaciones ordenadas de mas antigua a mas reciente
+    # para que el coach tenga contexto cronologico correcto
+    historial = list(
+        usuario.conversaciones.filter(tipo='coach').order_by('-fecha')[:10]
+    )
+    historial.reverse()  # Mas antigua primero
     contexto = '\n'.join([
         f"Usuario: {c.mensaje_usuario}\nCoach: {c.respuesta_ia}"
-        for c in reversed(list(historial))
+        for c in historial
     ])
 
     progresos = usuario.progresos.all()[:3]
@@ -428,6 +433,7 @@ def chat_coach(usuario, mensaje):
                     calorias=nuevo_plan_data.get('calorias_diarias', 2000),
                     objetivo=nuevo_plan_data.get('objetivo', ''),
                     duracion_dias=nuevo_plan_data.get('duracion_dias', 30),
+                    activo=True,
                 )
                 momento_map = {
                     'desayuno': 'desayuno', 'almuerzo': 'almuerzo',
@@ -449,7 +455,9 @@ def chat_coach(usuario, mensaje):
                         tiempo_preparacion=comida.get('tiempo_preparacion', 0),
                         orden=index + 1
                     )
-                texto += '\n\n✅ ¡Listo! Ya generé un nuevo plan de alimentación adaptado a tus preferencias.'
+                texto += '\n\n✅ ¡Listo! Ya generé un nuevo plan de alimentación adaptado a tus preferencias. Recarga la pantalla de alimentación para verlo.'
+                # Flag para que Flutter sepa que debe recargar el plan
+                texto += '\n{"plan_alimentacion_regenerado": true}'
         except Exception:
             pass
 
@@ -475,6 +483,7 @@ def chat_coach(usuario, mensaje):
                     tipo_entrenamiento=nuevo_plan_data.get('tipo_entrenamiento', ''),
                     nivel=nuevo_plan_data.get('nivel', 'Principiante'),
                     duracion=nuevo_plan_data.get('duracion', 4),
+                    activo=True,
                 )
                 for index, ejercicio in enumerate(nuevo_plan_data.get('ejercicios', [])):
                     RutinaEjercicio.objects.create(
