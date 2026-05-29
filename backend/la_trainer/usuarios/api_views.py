@@ -272,9 +272,15 @@ class PlanAlimentacionActivoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        plan = PlanAlimentacion.objects.filter(
+        # Si por alguna razon quedaron varios activos, conservar el mas reciente
+        planes_activos = PlanAlimentacion.objects.filter(
             usuario=request.user, activo=True
-        ).last()
+        ).order_by('-id')
+        if planes_activos.count() > 1:
+            ids_viejos = list(planes_activos.values_list('id', flat=True)[1:])
+            PlanAlimentacion.objects.filter(id__in=ids_viejos).update(activo=False)
+
+        plan = planes_activos.first()
 
         if not plan:
             plan_completado = PlanAlimentacion.objects.filter(
@@ -310,6 +316,60 @@ class PlanAlimentacionActivoAPIView(APIView):
             'ya_registro_hoy': progreso_hoy is not None,
             'progreso_hoy': ProgresoAlimentacionSerializer(progreso_hoy).data if progreso_hoy else None,
         })
+
+
+class PlanAlimentacionDebugAPIView(APIView):
+    """
+    GET /api/planes/alimentacion/debug/
+    Muestra todos los planes del usuario con su estado real.
+    DELETE limpia los duplicados activos dejando solo el mas reciente.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        planes = PlanAlimentacion.objects.filter(
+            usuario=request.user
+        ).order_by('-id')
+        resultado = []
+        for p in planes:
+            comidas = p.rutina_comidas.all()
+            resultado.append({
+                'id': p.id,
+                'activo': p.activo,
+                'completado': p.completado,
+                'objetivo': p.objetivo,
+                'duracion_dias': p.duracion_dias,
+                'dias_completados': p.dias_completados,
+                'comidas_count': comidas.count(),
+                'primera_comida': comidas.first().nombre if comidas.exists() else 'sin comidas',
+            })
+        return Response({
+            'total_planes': len(resultado),
+            'planes_activos': len([p for p in resultado if p['activo']]),
+            'planes': resultado,
+        })
+
+    def delete(self, request):
+        planes_activos = PlanAlimentacion.objects.filter(
+            usuario=request.user, activo=True
+        ).order_by('-id')
+        if planes_activos.count() > 1:
+            ids_viejos = list(planes_activos.values_list('id', flat=True)[1:])
+            PlanAlimentacion.objects.filter(id__in=ids_viejos).update(activo=False)
+            return Response({
+                'mensaje': f'{len(ids_viejos)} planes duplicados desactivados.',
+                'plan_activo_id': planes_activos.first().id,
+                'primera_comida': planes_activos.first().rutina_comidas.first().nombre if planes_activos.first().rutina_comidas.exists() else 'sin comidas',
+            })
+        if planes_activos.count() == 1:
+            p = planes_activos.first()
+            return Response({
+                'mensaje': 'No habia duplicados.',
+                'plan_activo_id': p.id,
+                'primera_comida': p.rutina_comidas.first().nombre if p.rutina_comidas.exists() else 'sin comidas',
+            })
+        return Response({'mensaje': 'No hay ningun plan activo.'})
+
 
 
 class PlanAlimentacionDetalleAPIView(APIView):
