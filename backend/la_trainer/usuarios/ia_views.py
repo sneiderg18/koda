@@ -15,27 +15,20 @@ class GenerarPlanEntrenamientoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Verifica si ya tiene un plan activo
-        plan_activo = PlanEntrenamiento.objects.filter(
-            usuario=request.user, activo=True
-        ).last()
-        if plan_activo:
-            return Response(
-                {
-                    'error': 'Ya tienes un plan de entrenamiento activo. Finalízalo antes de generar uno nuevo.',
-                    'plan_actual': PlanEntrenamientoSerializer(plan_activo).data
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         try:
             resultado = ia_service.generar_plan_entrenamiento(request.user)
+
+            # Desactivar TODOS los planes activos anteriores antes de crear el nuevo
+            PlanEntrenamiento.objects.filter(
+                usuario=request.user, activo=True
+            ).update(activo=False)
 
             plan = PlanEntrenamiento.objects.create(
                 usuario=request.user,
                 tipo_entrenamiento=resultado.get('tipo_entrenamiento', ''),
                 nivel=resultado.get('nivel', 'Principiante'),
                 duracion=resultado.get('duracion', 4),
+                activo=True,
             )
 
             # Guarda cada ejercicio de la rutina en DB
@@ -75,19 +68,6 @@ class GenerarPlanAlimentacionAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        # Verifica si ya tiene un plan de alimentación activo
-        plan_activo = PlanAlimentacion.objects.filter(
-            usuario=request.user, activo=True
-        ).last()
-        if plan_activo:
-            return Response(
-                {
-                    'error': 'Ya tienes un plan de alimentación activo. Finalízalo antes de generar uno nuevo.',
-                    'plan_actual': PlanAlimentacionSerializer(plan_activo).data
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         try:
             # Buscar el último plan completado para pasarlo como contexto a la IA
             plan_anterior = PlanAlimentacion.objects.filter(
@@ -96,11 +76,17 @@ class GenerarPlanAlimentacionAPIView(APIView):
 
             resultado = ia_service.generar_plan_alimentacion(request.user, plan_anterior)
 
+            # Desactivar TODOS los planes activos anteriores antes de crear el nuevo
+            PlanAlimentacion.objects.filter(
+                usuario=request.user, activo=True
+            ).update(activo=False)
+
             plan = PlanAlimentacion.objects.create(
                 usuario=request.user,
                 calorias=resultado.get('calorias_diarias', 2000),
                 objetivo=resultado.get('objetivo', ''),
                 duracion_dias=resultado.get('duracion_dias', 30),
+                activo=True,
             )
 
             # Guarda cada comida de la rutina en DB con receta completa
