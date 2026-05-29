@@ -5,8 +5,8 @@ import time
 from google import genai
 
 cliente = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
-# gemini-2.0-flash es mas estable para instrucciones de formato estricto
-MODELO = 'gemini-2.0-flash'
+# gemini-2.0-flash-lite es mas estable para instrucciones de formato estricto
+MODELO = 'gemini-2.0-flash-lite'
 
 
 def _llamar_gemini(prompt, max_reintentos=3):
