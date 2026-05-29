@@ -91,52 +91,93 @@ def _imagen_comida(nombre_comida):
     return ''
 
 
-def _buscar_imagen_ejercicio(nombre_ejercicio):
-    """
-    Busca la imagen de un ejercicio en la API publica de Wger.
-    Devuelve la URL de la imagen o cadena vacia si no encuentra.
-    """
-    import requests
-    try:
-        terminos = {
-            'press': 'press', 'sentadilla': 'squat', 'peso muerto': 'deadlift',
-            'dominada': 'pull-up', 'fondos': 'dip', 'plancha': 'plank',
-            'remo': 'row', 'curl': 'curl', 'extension': 'extension',
-            'elevacion': 'raise', 'aperturas': 'fly', 'burpee': 'burpee',
-            'zancada': 'lunge', 'hip thrust': 'hip thrust', 'crunch': 'crunch',
-        }
-        nombre_lower = nombre_ejercicio.lower()
-        termino_busqueda = nombre_ejercicio
-        for es, en in terminos.items():
-            if es in nombre_lower:
-                termino_busqueda = en
-                break
+# Cache global del indice de ejercicios (se carga una sola vez por proceso)
+_EJERCICIOS_DB = None
+_BASE_IMG_URL = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/"
 
-        res = requests.get(
-            'https://wger.de/api/v2/exercise/',
-            params={'format': 'json', 'language': 2, 'name': termino_busqueda, 'limit': 5},
-            timeout=5
-        )
-        if res.status_code == 200:
-            data = res.json()
-            if data.get('results'):
-                ejercicio_id = (
-                    data['results'][0].get('exercise_base_id')
-                    or data['results'][0].get('id')
-                )
-                if ejercicio_id:
-                    img_res = requests.get(
-                        'https://wger.de/api/v2/exerciseimage/',
-                        params={'format': 'json', 'exercise_base': ejercicio_id},
-                        timeout=5
-                    )
-                    if img_res.status_code == 200:
-                        imgs = img_res.json().get('results', [])
-                        if imgs:
-                            return imgs[0].get('image', '')
+
+def _cargar_db_ejercicios():
+    global _EJERCICIOS_DB
+    if _EJERCICIOS_DB is not None:
+        return _EJERCICIOS_DB
+    import urllib.request
+    import json as _json
+    try:
+        url = ("https://raw.githubusercontent.com/yuhonas/"
+               "free-exercise-db/main/dist/exercises.json")
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            _EJERCICIOS_DB = _json.loads(r.read())
     except Exception:
-        pass
-    return ''
+        _EJERCICIOS_DB = []
+    return _EJERCICIOS_DB
+
+
+def _buscar_imagen_ejercicio(nombre_ejercicio, grupo_muscular=""):
+    db = _cargar_db_ejercicios()
+    if not db:
+        return ""
+
+    terminos_nombre = {
+        "press": "press", "sentadilla": "squat", "peso muerto": "deadlift",
+        "dominada": "pull", "fondos": "dip", "plancha": "plank",
+        "remo": "row", "curl": "curl", "extension": "extension",
+        "elevacion": "raise", "apertura": "fly", "burpee": "burpee",
+        "zancada": "lunge", "hip thrust": "hip", "crunch": "crunch",
+        "press militar": "overhead", "jalon": "pulldown",
+        "vuelo": "fly", "patada": "kickback",
+    }
+
+    musculo_map = {
+        "pecho": "chest", "espalda": "lats", "hombros": "shoulders",
+        "biceps": "biceps", "triceps": "triceps", "piernas": "quadriceps",
+        "cuadriceps": "quadriceps", "isquiotibiales": "hamstrings",
+        "gluteos": "glutes", "abdomen": "abdominals", "pantorrillas": "calves",
+        "antebrazos": "forearms", "trapecio": "traps",
+        "espalda baja": "lower back", "espalda media": "middle back",
+    }
+
+    nombre_lower = nombre_ejercicio.lower()
+    musculo_lower = grupo_muscular.lower().strip()
+
+    musculo_en = None
+    for es, en in musculo_map.items():
+        if es in musculo_lower:
+            musculo_en = en
+            break
+
+    termino_en = None
+    for es, en in terminos_nombre.items():
+        if es in nombre_lower:
+            termino_en = en
+            break
+
+    def _url(e):
+        imgs = e.get("images", [])
+        return (_BASE_IMG_URL + imgs[0]) if imgs else ""
+
+    if termino_en and musculo_en:
+        for e in db:
+            if termino_en in e["name"].lower() and musculo_en in e.get("primaryMuscles", []):
+                u = _url(e)
+                if u:
+                    return u
+
+    if termino_en:
+        for e in db:
+            if termino_en in e["name"].lower():
+                u = _url(e)
+                if u:
+                    return u
+
+    if musculo_en:
+        for e in db:
+            if musculo_en in e.get("primaryMuscles", []):
+                u = _url(e)
+                if u:
+                    return u
+
+    return ""
 
 
 def generar_plan_entrenamiento(usuario):
@@ -178,7 +219,10 @@ def generar_plan_entrenamiento(usuario):
     resultado = json.loads(_limpiar_json(respuesta.text))
 
     for ejercicio in resultado.get('ejercicios', []):
-        imagen = _buscar_imagen_ejercicio(ejercicio.get('nombre', ''))
+        imagen = _buscar_imagen_ejercicio(
+            ejercicio.get('nombre', ''),
+            ejercicio.get('grupo_muscular', '')
+        )
         ejercicio['imagen_url'] = imagen
 
     return resultado
