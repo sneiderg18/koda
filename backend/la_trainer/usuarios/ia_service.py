@@ -59,36 +59,16 @@ def _limpiar_json(texto):
     return texto
 
 
+
 def _imagen_comida(nombre_comida):
     """
-    Devuelve una URL de imagen para la comida usando foodish API (gratuita, sin API key).
-    Si falla, devuelve cadena vacia.
+    Devuelve una URL de imagen para la comida.
+    Por ahora retorna cadena vacia — las imagenes de comida
+    se muestran en Flutter con un widget por categoria/momento.
     """
-    import requests
-    categorias = {
-        'arroz': 'rice', 'pollo': 'chicken', 'pasta': 'pasta', 'pizza': 'pizza',
-        'ensalada': 'salad', 'sopa': 'dessert', 'fruta': 'dessert',
-        'huevo': 'chicken', 'pescado': 'chicken', 'salmon': 'chicken',
-        'carne': 'chicken', 'hamburguesa': 'burger', 'sandwich': 'burger',
-        'desayuno': 'rice', 'almuerzo': 'rice', 'cena': 'pasta',
-    }
-    nombre_lower = nombre_comida.lower()
-    categoria = 'rice'  # default
-    for clave, cat in categorias.items():
-        if clave in nombre_lower:
-            categoria = cat
-            break
-    try:
-        res = requests.get(
-            f'https://foodish-api.com/api/images/{categoria}',
-            timeout=4
-        )
-        if res.status_code == 200:
-            data = res.json()
-            return data.get('image', '')
-    except Exception:
-        pass
     return ''
+
+
 
 
 # Cache global del indice de ejercicios (se carga una sola vez por proceso)
