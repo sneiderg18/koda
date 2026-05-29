@@ -10,6 +10,18 @@ const _kRed1  = Color(0xFFD72105);
 const _kBgTop = Color(0xFF0d0d0d);
 const _kBgBot = Color(0xFF0F0F1E);
 
+// ── Mapa local de emojis por id ───────────────────────────────────────────────
+const _emojiMap = {
+  'avatar_1': '🏃',
+  'avatar_2': '🏋️',
+  'avatar_3': '🧘',
+  'avatar_4': '🚴',
+  'avatar_5': '🏊',
+  'avatar_6': '🥊',
+  'avatar_7': '🧗',
+  'avatar_8': '💃',
+};
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -21,9 +33,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _perfil;
   bool _loading = true;
 
-  // Avatar
-  String  _avatarActual = '';
-  String  _avatarEmoji  = '🏃';
+  String _avatarActual = 'avatar_1';
+  String _avatarEmoji  = '🏃';
 
   @override
   void initState() {
@@ -34,15 +45,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _loadPerfil() async {
     final result = await AuthService.getPerfil();
     if (mounted) {
+      final data = result['success'] == true ? result['data'] as Map<String, dynamic> : <String, dynamic>{};
+      final avatarId = data['avatar']?.toString() ?? 'avatar_1';
       setState(() {
-        _perfil  = result['success'] == true ? result['data'] : {};
-        _avatarActual = _perfil?['avatar'] ?? 'avatar_1';
-        _loading = false;
+        _perfil       = data;
+        _avatarActual = avatarId;
+        _avatarEmoji  = _emojiMap[avatarId] ?? '🏃'; // ← resuelve emoji al cargar
+        _loading      = false;
       });
     }
   }
 
-  // ── Abre el modal de selección de avatar ──────────────────────────────────
   Future<void> _abrirSelectorAvatar() async {
     final seleccionado = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
@@ -53,7 +66,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (seleccionado == null || !mounted) return;
 
-    // Guardar en backend
     final token = await AuthService.getToken();
     if (token == null) return;
 
@@ -64,14 +76,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
         },
-        body: jsonEncode({'avatar': seleccionado['id']}),
+        body: jsonEncode({
+          ..._perfil ?? {},
+          'avatar': seleccionado['id'],
+        }),
       );
 
-      if (res.statusCode == 200 && mounted) {
+      if (!mounted) return;
+
+      if (res.statusCode == 200) {
+        final nuevaId    = seleccionado['id'] as String;
+        final nuevoEmoji = seleccionado['emoji'] as String? ?? _emojiMap[nuevaId] ?? '🏃';
         setState(() {
-          _avatarActual = seleccionado['id'] as String;
-          _avatarEmoji  = seleccionado['emoji'] as String;
-          _perfil?['avatar'] = _avatarActual;
+          _avatarActual       = nuevaId;
+          _avatarEmoji        = nuevoEmoji;
+          _perfil?['avatar']  = nuevaId;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -82,11 +101,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
             margin: const EdgeInsets.all(16),
           ),
         );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('No se pudo guardar el avatar (${res.statusCode})'),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+          ),
+        );
       }
-    } catch (_) {}
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error de conexión al guardar avatar'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
   String _label(String key) {
     const map = {
       'username':        'Usuario',
@@ -146,8 +183,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 _buildTopBar(context),
                 Expanded(
                   child: _loading
-                      ? const Center(
-                          child: CircularProgressIndicator(color: _kRed1))
+                      ? const Center(child: CircularProgressIndicator(color: _kRed1))
                       : _buildContent(),
                 ),
               ],
@@ -205,10 +241,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 4),
           Text(
             _perfil?['email'] ?? '',
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.white.withOpacity(0.45),
-            ),
+            style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.45)),
           ),
           const SizedBox(height: 32),
           Container(
@@ -237,36 +270,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── Avatar con emoji ──────────────────────────────────────────────────────
   Widget _buildAvatar(String username) {
-    // Buscar emoji del avatar actual
-    final emoji = _avatarEmoji.isNotEmpty ? _avatarEmoji : '🏃';
-
     return SizedBox(
       width: 100,
       height: 100,
       child: Stack(
         children: [
-          // Círculo con emoji
           Container(
             width: 100,
             height: 100,
             decoration: BoxDecoration(
               color: _kRed1.withOpacity(0.15),
               shape: BoxShape.circle,
-              border: Border.all(
-                color: _kRed1.withOpacity(0.4),
-                width: 2,
-              ),
+              border: Border.all(color: _kRed1.withOpacity(0.4), width: 2),
             ),
             child: Center(
-              child: Text(
-                emoji,
-                style: const TextStyle(fontSize: 44),
-              ),
+              child: Text(_avatarEmoji, style: const TextStyle(fontSize: 44)),
             ),
           ),
-          // Botón editar
           Positioned(
             bottom: 2,
             right: 2,
@@ -278,11 +299,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 decoration: BoxDecoration(
                   color: _kRed1,
                   shape: BoxShape.circle,
-                  border: Border.all(
-                      color: const Color(0xFF0d0d0d), width: 2),
+                  border: Border.all(color: const Color(0xFF0d0d0d), width: 2),
                 ),
-                child: const Icon(Icons.edit_rounded,
-                    color: Colors.white, size: 14),
+                child: const Icon(Icons.edit_rounded, color: Colors.white, size: 14),
               ),
             ),
           ),
@@ -301,10 +320,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Expanded(
             child: Text(
               _label(key),
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.white.withOpacity(0.5),
-              ),
+              style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.5)),
             ),
           ),
           Text(
@@ -374,11 +390,11 @@ class _AvatarSelectorModalState extends State<_AvatarSelectorModal>
       if (!mounted) return;
 
       if (res.statusCode == 200) {
-        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        final body  = jsonDecode(res.body) as Map<String, dynamic>;
         final lista = body['avatares'] as List? ?? [];
         setState(() {
-          _avatares  = lista.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-          _loading   = false;
+          _avatares = lista.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          _loading  = false;
         });
       } else {
         setState(() => _loading = false);
@@ -403,7 +419,6 @@ class _AvatarSelectorModalState extends State<_AvatarSelectorModal>
         ),
         child: Column(
           children: [
-            // ── Header ────────────────────────────────────────────────────
             Container(
               decoration: const BoxDecoration(
                 color: Color(0xFF1C1C1C),
@@ -430,8 +445,7 @@ class _AvatarSelectorModalState extends State<_AvatarSelectorModal>
                           color: _kRed1.withOpacity(0.15),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.person_rounded,
-                            color: _kRed1, size: 18),
+                        child: const Icon(Icons.person_rounded, color: _kRed1, size: 18),
                       ),
                       const SizedBox(width: 10),
                       Column(
@@ -447,15 +461,13 @@ class _AvatarSelectorModalState extends State<_AvatarSelectorModal>
                           ),
                           const Text(
                             'Selecciona el que mejor te representa',
-                            style: TextStyle(
-                                color: Colors.white38, fontSize: 11),
+                            style: TextStyle(color: Colors.white38, fontSize: 11),
                           ),
                         ],
                       ),
                       const Spacer(),
                       IconButton(
-                        icon: const Icon(Icons.close_rounded,
-                            color: Colors.white38, size: 20),
+                        icon: const Icon(Icons.close_rounded, color: Colors.white38, size: 20),
                         onPressed: () => Navigator.pop(context),
                       ),
                     ],
@@ -464,44 +476,41 @@ class _AvatarSelectorModalState extends State<_AvatarSelectorModal>
               ),
             ),
 
-            // ── Grid de avatares ──────────────────────────────────────────
             Expanded(
               child: _loading
-                  ? const Center(
-                      child: CircularProgressIndicator(color: _kRed1))
+                  ? const Center(child: CircularProgressIndicator(color: _kRed1))
                   : _avatares.isEmpty
                       ? const Center(
                           child: Text('No se pudieron cargar los avatares',
                               style: TextStyle(color: Colors.white38)))
                       : GridView.builder(
                           padding: const EdgeInsets.all(20),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
                             crossAxisSpacing: 14,
                             mainAxisSpacing: 14,
                             childAspectRatio: 1.1,
                           ),
                           itemCount: _avatares.length,
-                          itemBuilder: (_, i) =>
-                              _buildAvatarCard(_avatares[i]),
+                          itemBuilder: (_, i) => _buildAvatarCard(_avatares[i]),
                         ),
             ),
 
-            // ── Botón confirmar ───────────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
               child: SizedBox(
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () {
-                    final avatar = _avatares.firstWhere(
-                      (a) => a['id'] == _seleccionado,
-                      orElse: () => _avatares.first,
-                    );
-                    Navigator.pop(context, avatar);
-                  },
+                  onPressed: _avatares.isEmpty
+                      ? null
+                      : () {
+                          final avatar = _avatares.firstWhere(
+                            (a) => a['id'] == _seleccionado,
+                            orElse: () => _avatares.first,
+                          );
+                          Navigator.pop(context, avatar);
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _kRed1,
                     shape: RoundedRectangleBorder(
@@ -526,10 +535,10 @@ class _AvatarSelectorModalState extends State<_AvatarSelectorModal>
   }
 
   Widget _buildAvatarCard(Map<String, dynamic> avatar) {
-    final id          = avatar['id'] as String;
-    final nombre      = avatar['nombre'] as String? ?? '';
-    final descripcion = avatar['descripcion'] as String? ?? '';
-    final emoji       = avatar['emoji'] as String? ?? '🏃';
+    final id           = avatar['id'] as String;
+    final nombre       = avatar['nombre'] as String? ?? '';
+    final descripcion  = avatar['descripcion'] as String? ?? '';
+    final emoji        = avatar['emoji'] as String? ?? _emojiMap[id] ?? '🏃';
     final seleccionado = id == _seleccionado;
 
     return GestureDetector(
@@ -537,24 +546,14 @@ class _AvatarSelectorModalState extends State<_AvatarSelectorModal>
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          color: seleccionado
-              ? _kRed1.withOpacity(0.15)
-              : const Color(0xFF1C1C1C),
+          color: seleccionado ? _kRed1.withOpacity(0.15) : const Color(0xFF1C1C1C),
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: seleccionado
-                ? _kRed1
-                : Colors.white.withOpacity(0.06),
+            color: seleccionado ? _kRed1 : Colors.white.withOpacity(0.06),
             width: seleccionado ? 2 : 1,
           ),
           boxShadow: seleccionado
-              ? [
-                  BoxShadow(
-                    color: _kRed1.withOpacity(0.25),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ]
+              ? [BoxShadow(color: _kRed1.withOpacity(0.25), blurRadius: 12, offset: const Offset(0, 4))]
               : [],
         ),
         padding: const EdgeInsets.all(14),
@@ -590,10 +589,7 @@ class _AvatarSelectorModalState extends State<_AvatarSelectorModal>
                 ),
                 child: const Text(
                   'Seleccionado',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold),
+                  style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
                 ),
               ),
             ],
@@ -604,7 +600,7 @@ class _AvatarSelectorModalState extends State<_AvatarSelectorModal>
   }
 }
 
-// ── Fondo deportivo ────────────────────────────────────────────────────────
+// ── Fondo deportivo ────────────────────────────────────────────────────────────
 class _SportsBgPainter extends CustomPainter {
   const _SportsBgPainter();
 
@@ -628,25 +624,18 @@ class _SportsBgPainter extends CustomPainter {
     ]) {
       canvas.drawCircle(c, r, _stroke);
     }
-
     canvas.drawLine(Offset(-20, s.height * 0.15), Offset(s.width * 0.40, -20), _thick);
     canvas.drawLine(Offset(-20, s.height * 0.28), Offset(s.width * 0.55, -20), _thick);
     canvas.drawLine(Offset(s.width + 20, s.height * 0.72), Offset(s.width * 0.55, s.height + 20), _thick);
     canvas.drawLine(Offset(s.width + 20, s.height * 0.58), Offset(s.width * 0.38, s.height + 20), _thick);
-
     canvas.drawArc(
-      Rect.fromCenter(
-          center: Offset(s.width * 0.05, s.height * 0.5),
-          width: 140, height: 140),
+      Rect.fromCenter(center: Offset(s.width * 0.05, s.height * 0.5), width: 140, height: 140),
       -math.pi / 2, math.pi, false, _stroke,
     );
     canvas.drawArc(
-      Rect.fromCenter(
-          center: Offset(s.width * 0.95, s.height * 0.5),
-          width: 120, height: 120),
+      Rect.fromCenter(center: Offset(s.width * 0.95, s.height * 0.5), width: 120, height: 120),
       math.pi / 2, math.pi, false, _stroke,
     );
-
     for (final pt in [
       Offset(s.width * 0.15, s.height * 0.22),
       Offset(s.width * 0.82, s.height * 0.45),

@@ -47,9 +47,8 @@ class AuthService {
   }
 
   // ── TOKEN VÁLIDO (valida localmente el JWT, refresca si expiró) ──────────
-  // FIX: antes hacía una petición HTTP al /api/perfil/ solo para verificar
-  // el token, lo que era lento e innecesario. Ahora decodifica el JWT
-  // localmente (sin verificar firma, solo el exp) para ver si expiró.
+  // Decodifica el JWT localmente (sin verificar firma, solo el exp)
+  // para ver si expiró, evitando una petición HTTP innecesaria.
   static Future<String?> getValidToken() async {
     final prefs = await SharedPreferences.getInstance();
     final access = prefs.getString(_keyAccess);
@@ -64,7 +63,7 @@ class AuthService {
       return await _refreshToken(refresh);
     }
 
-    return null;
+    return null; // sesión inválida sin posibilidad de refrescar
   }
 
   /// Decodifica el payload del JWT y comprueba si ya expiró.
@@ -103,7 +102,10 @@ class AuthService {
       final res = await http
           .post(
             Uri.parse('${ApiConfig.baseUrl}/api/token/refresh/'),
-            headers: _baseHeaders,
+            headers: {
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+            },
             body: jsonEncode({'refresh': refresh}),
           )
           .timeout(const Duration(seconds: 8));
@@ -167,7 +169,7 @@ class AuthService {
   }
 
   // ── LOGIN ─────────────────────────────────────────────────
-  // FIX: envuelto en try/catch con timeout para evitar que el spinner
+  // Envuelto en try/catch con timeout para evitar que el spinner
   // quede girando infinitamente si no hay red o el servidor no responde.
   static Future<Map<String, dynamic>> login({
     required String email,
@@ -184,7 +186,6 @@ class AuthService {
           )
           .timeout(const Duration(seconds: 12));
     } catch (e) {
-      // Sin conexión, timeout o error de red
       return {
         'success': false,
         'message': 'No se pudo conectar con el servidor. Verifica tu conexión.',
@@ -237,7 +238,6 @@ class AuthService {
           await saveUsername(email.split('@').first);
         }
       } catch (_) {
-        // Si falla la consulta del perfil, no bloqueamos el login
         await saveUsername(email.split('@').first);
       }
 
@@ -271,7 +271,7 @@ class AuthService {
               'username': username,
               'password1': password1,
               'password2': password2,
-              'acepto_terminos': true, // ← agregar esto
+              'acepto_terminos': true,
             }),
           )
           .timeout(const Duration(seconds: 12));
@@ -336,7 +336,9 @@ class AuthService {
     return {'success': false, 'message': 'No se pudo obtener el perfil'};
   }
 
-  // ── REGISTRAR ACCESO DIARIO ───────────────────────────────
+  // ── REGISTRAR ACCESO DIARIO (racha y calendario) ──────────
+  /// Llama a /api/acceso/ con el token actual. Se hace fire-and-forget:
+  /// no bloquea el arranque si falla (sin red, token inválido, etc.).
   static Future<void> registrarAcceso() async {
     try {
       final token = await getToken();
@@ -345,11 +347,16 @@ class AuthService {
       await http
           .post(
             Uri.parse('${ApiConfig.baseUrl}/api/acceso/'),
-            headers: _authHeaders(token),
+            headers: {
+              'Content-Type': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+              'Authorization': 'Bearer $token',
+            },
           )
           .timeout(const Duration(seconds: 6));
     } catch (_) {
-      // Fire-and-forget: si falla no bloquea el arranque
+      // Si falla (sin red, 4xx, timeout) simplemente lo ignoramos.
+      // La racha se actualizará la próxima vez que haya conexión.
     }
   }
 }
