@@ -1,3 +1,3 @@
 class ApiConfig {
-  static const String baseUrl = 'https://koda-production-339d.up.railway.app';
+  static const String baseUrl = 'https://koda-us52.onrender.com';
 }
