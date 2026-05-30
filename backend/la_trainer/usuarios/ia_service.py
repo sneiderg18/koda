@@ -26,6 +26,11 @@ def _llamar_gemini(prompt, max_reintentos=3):
                     espera = 2 ** (intento + 1)
                     time.sleep(espera)
                     continue
+            if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'quota' in error_str.lower():
+                raise Exception(
+                    'El servicio de IA no esta disponible en este momento. '
+                    'Por favor intenta de nuevo mas tarde.'
+                )
             raise
     raise ultimo_error
 
@@ -195,8 +200,30 @@ def generar_plan_entrenamiento(usuario):
         ]
     }}
     """
-    respuesta = _llamar_gemini(prompt)
-    resultado = json.loads(_limpiar_json(respuesta.text))
+    try:
+        respuesta = _llamar_gemini(prompt)
+        resultado = json.loads(_limpiar_json(respuesta.text))
+    except Exception as e:
+        error_str = str(e)
+        if 'disponible' in error_str or 'quota' in error_str.lower() or '429' in error_str:
+            raise
+        # Si Gemini devuelve JSON invalido, generar plan basico por defecto
+        resultado = {
+            "nivel": "Principiante",
+            "tipo_entrenamiento": "Fuerza general",
+            "duracion": 4,
+            "descripcion": "Plan basico de entrenamiento adaptado a tu perfil.",
+            "ejercicios": [
+                {"nombre": "Sentadilla", "series": 3, "repeticiones": 12, "descanso": "60 segundos", "grupo_muscular": "Piernas"},
+                {"nombre": "Flexiones", "series": 3, "repeticiones": 10, "descanso": "60 segundos", "grupo_muscular": "Pecho"},
+                {"nombre": "Remo con mancuerna", "series": 3, "repeticiones": 12, "descanso": "60 segundos", "grupo_muscular": "Espalda"},
+                {"nombre": "Press de hombros", "series": 3, "repeticiones": 10, "descanso": "60 segundos", "grupo_muscular": "Hombros"},
+                {"nombre": "Curl de biceps", "series": 3, "repeticiones": 12, "descanso": "60 segundos", "grupo_muscular": "Biceps"},
+                {"nombre": "Extension de triceps", "series": 3, "repeticiones": 12, "descanso": "60 segundos", "grupo_muscular": "Triceps"},
+                {"nombre": "Plancha", "series": 3, "repeticiones": 30, "descanso": "45 segundos", "grupo_muscular": "Abdomen"},
+                {"nombre": "Zancadas", "series": 3, "repeticiones": 10, "descanso": "60 segundos", "grupo_muscular": "Piernas"},
+            ]
+        }
 
     for ejercicio in resultado.get('ejercicios', []):
         imagen = _buscar_imagen_ejercicio(
@@ -285,8 +312,76 @@ def generar_plan_alimentacion(usuario, plan_anterior=None):
         ]
     }}
     """
-    respuesta = _llamar_gemini(prompt)
-    resultado = json.loads(_limpiar_json(respuesta.text))
+    try:
+        respuesta = _llamar_gemini(prompt)
+        resultado = json.loads(_limpiar_json(respuesta.text))
+    except Exception as e:
+        error_str = str(e)
+        if 'disponible' in error_str or 'quota' in error_str.lower() or '429' in error_str:
+            raise
+        # Si Gemini devuelve JSON invalido, generar plan basico por defecto
+        calorias_base = 2000
+        if usuario.peso and usuario.altura and usuario.edad:
+            try:
+                calorias_base = int(float(usuario.peso) * 24)
+            except Exception:
+                calorias_base = 2000
+        resultado = {
+            "calorias_diarias": calorias_base,
+            "objetivo": usuario.objetivo or "Alimentacion equilibrada",
+            "descripcion": "Plan de alimentacion basico adaptado a tu perfil.",
+            "duracion_dias": 30,
+            "comidas": [
+                {
+                    "nombre": "Avena con frutas",
+                    "momento": "Desayuno",
+                    "calorias": 350,
+                    "proteinas": 12,
+                    "carbohidratos": 55,
+                    "grasas": 8,
+                    "descripcion": "Desayuno nutritivo y energizante",
+                    "ingredientes": "- 1 taza de avena (90g)\n- 1 banano\n- 200ml leche\n- 1 cucharada de miel",
+                    "preparacion": "1. Calentar la leche.\n2. Agregar la avena y cocinar 5 minutos.\n3. Servir con el banano en rodajas y la miel.",
+                    "tiempo_preparacion": 10
+                },
+                {
+                    "nombre": "Arroz con pollo y ensalada",
+                    "momento": "Almuerzo",
+                    "calorias": 550,
+                    "proteinas": 35,
+                    "carbohidratos": 60,
+                    "grasas": 10,
+                    "descripcion": "Almuerzo completo con proteina y carbohidratos",
+                    "ingredientes": "- 150g pechuga de pollo\n- 1 taza de arroz (185g cocido)\n- Ensalada de lechuga y tomate\n- 1 cucharada aceite de oliva",
+                    "preparacion": "1. Cocinar el pollo a la plancha con sal y pimienta.\n2. Preparar el arroz.\n3. Mezclar la ensalada con aceite.",
+                    "tiempo_preparacion": 25
+                },
+                {
+                    "nombre": "Yogur con nueces",
+                    "momento": "Merienda",
+                    "calorias": 200,
+                    "proteinas": 10,
+                    "carbohidratos": 20,
+                    "grasas": 8,
+                    "descripcion": "Merienda proteica y saciante",
+                    "ingredientes": "- 200g yogur griego\n- 30g nueces\n- 1 cucharadita de miel",
+                    "preparacion": "1. Servir el yogur en un tazón.\n2. Agregar las nueces picadas y la miel.",
+                    "tiempo_preparacion": 5
+                },
+                {
+                    "nombre": "Salmon con verduras al vapor",
+                    "momento": "Cena",
+                    "calorias": 400,
+                    "proteinas": 38,
+                    "carbohidratos": 20,
+                    "grasas": 18,
+                    "descripcion": "Cena ligera rica en proteinas y omega-3",
+                    "ingredientes": "- 180g salmon\n- 1 taza brocoli\n- 1 zanahoria\n- Limon y hierbas al gusto",
+                    "preparacion": "1. Cocinar el salmon al horno 180C por 15 minutos.\n2. Cocinar las verduras al vapor 8 minutos.\n3. Servir con limon.",
+                    "tiempo_preparacion": 20
+                },
+            ]
+        }
 
     for comida in resultado.get('comidas', []):
         comida['imagen_url'] = _imagen_comida(comida.get('nombre', ''))
