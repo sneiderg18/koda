@@ -175,7 +175,7 @@ class ActualizarImagenesEjerciciosAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        ejercicios_sin_imagen = plan.rutina_ejercicios.filter(imagen_url='')
+        ejercicios_sin_imagen = plan.rutina_ejercicios.filter(imagen_url__in=['', None])
         total = ejercicios_sin_imagen.count()
 
         if total == 0:
