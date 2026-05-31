@@ -152,6 +152,60 @@ class PlanEntrenamientoAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class ActualizarImagenesEjerciciosAPIView(APIView):
+    """
+    POST /api/planes/entrenamiento/actualizar-imagenes/
+    Actualiza la imagen_url de todos los ejercicios del plan activo
+    que no tienen imagen asignada. Usa free-exercise-db de GitHub.
+    Util para usuarios con planes generados antes de la implementacion
+    de imagenes.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from . import ia_service
+
+        plan = PlanEntrenamiento.objects.filter(
+            usuario=request.user, activo=True
+        ).last()
+
+        if not plan:
+            return Response(
+                {'error': 'No tienes un plan de entrenamiento activo.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        ejercicios_sin_imagen = plan.rutina_ejercicios.filter(imagen_url='')
+        total = ejercicios_sin_imagen.count()
+
+        if total == 0:
+            return Response({
+                'mensaje': 'Todos los ejercicios ya tienen imagen.',
+                'actualizados': 0,
+            })
+
+        actualizados = 0
+        for ejercicio in ejercicios_sin_imagen:
+            try:
+                url = ia_service._buscar_imagen_ejercicio(
+                    ejercicio.nombre,
+                    ejercicio.grupo_muscular
+                )
+                if url:
+                    ejercicio.imagen_url = url
+                    ejercicio.save(update_fields=['imagen_url'])
+                    actualizados += 1
+            except Exception:
+                continue
+
+        return Response({
+            'mensaje': f'{actualizados} de {total} ejercicios actualizados con imagen.',
+            'actualizados': actualizados,
+            'total_sin_imagen': total,
+        })
+
+
+
 class PlanActivoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 

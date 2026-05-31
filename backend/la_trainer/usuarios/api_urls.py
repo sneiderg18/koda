@@ -23,6 +23,7 @@ urlpatterns = [
     # ─── Planes entrenamiento (específicas antes de <pk>) ────
     path('planes/entrenamiento/', api_views.PlanEntrenamientoAPIView.as_view(), name='api_planes_entrenamiento'),
     path('planes/entrenamiento/activo/', api_views.PlanActivoAPIView.as_view(), name='api_plan_activo'),
+    path('planes/entrenamiento/actualizar-imagenes/', api_views.ActualizarImagenesEjerciciosAPIView.as_view(), name='api_actualizar_imagenes'),
     path('planes/entrenamiento/completar/', api_views.CompletarSesionAPIView.as_view(), name='api_completar_sesion'),
     path('planes/entrenamiento/<int:pk>/', api_views.PlanEntrenamientoDetalleAPIView.as_view(), name='api_plan_entrenamiento_detalle'),
     path('planes/entrenamiento/<int:pk>/rutina/', api_views.RutinaEjercicioAPIView.as_view(), name='api_rutina_ejercicio'),
