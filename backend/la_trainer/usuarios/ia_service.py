@@ -27,8 +27,13 @@ def _llamar_gemini(prompt, max_reintentos=3):
                     time.sleep(espera)
                     continue
             if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'quota' in error_str.lower():
+                if intento < max_reintentos - 1:
+                    espera = 30 * (intento + 1)  # 30s, 60s
+                    time.sleep(espera)
+                    continue
                 raise Exception(
-                    f'Gemini error 429: {error_str[:300]}'
+                    'El servicio de IA no esta disponible en este momento. '
+                    'Por favor intenta de nuevo en unos minutos.'
                 )
             raise
     raise ultimo_error
@@ -612,6 +617,7 @@ def chat_coach(usuario, mensaje):
                 plan_alimentacion_activo.save()
 
             # Generar nuevo plan
+            time.sleep(5)  # delay entre llamadas encadenadas a Gemini
             nuevo_plan_data = generar_plan_alimentacion(usuario)
 
             from .models import PlanAlimentacion, RutinaComida
@@ -669,6 +675,7 @@ def chat_coach(usuario, mensaje):
                 plan_entrenamiento_activo.completado = True
                 plan_entrenamiento_activo.save()
 
+            time.sleep(5)  # delay entre llamadas encadenadas a Gemini
             nuevo_plan_data = generar_plan_entrenamiento(usuario)
 
             from .models import PlanEntrenamiento, RutinaEjercicio
