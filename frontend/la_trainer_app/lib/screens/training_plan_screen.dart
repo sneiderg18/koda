@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
@@ -85,7 +86,7 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
           _ejercicios           = rutina is List ? List<dynamic>.from(rutina) : [];
           _sesionesCompletadas  = body['sesiones_completadas'] ?? 0;
           _sesionesTotales      = body['sesiones_totales']     ?? 0;
-          _yaEntrenoHoy         = false; // se actualiza al intentar iniciar
+          _yaEntrenoHoy         = false;
           _loading              = false;
         });
       } else {
@@ -162,7 +163,6 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
 
       final body = jsonDecode(res.body) as Map<String, dynamic>;
 
-      // ── El backend dice que ya entrenó hoy ──────────────────────────────
       if (body['puede_entrenar_hoy'] == false ||
           body['sesion_completada_hoy'] == true) {
         setState(() {
@@ -175,9 +175,10 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       }
 
       if (res.statusCode == 200 || res.statusCode == 201) {
-        final sesionId = body['id'] as int?
-            ?? body['sesion_id'] as int?
-            ?? (body['sesion'] as Map<String, dynamic>?)?['id'] as int?;
+        final sesionData = body['sesion'] as Map<String, dynamic>?;
+        final sesionId   = sesionData?['id'] as int?
+            ?? body['id'] as int?
+            ?? body['sesion_id'] as int?;
 
         setState(() => _iniciando = false);
 
@@ -188,7 +189,6 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
           ),
         );
 
-        // Al regresar recargamos el plan
         await _loadPlan();
 
       } else {
@@ -247,7 +247,6 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
-  // ── Header ────────────────────────────────────────────────────────────────
   Widget _buildHeader() {
     return Column(
       children: [
@@ -338,7 +337,6 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
-  // ── Banner: ya entrenó hoy ────────────────────────────────────────────────
   Widget _buildYaEntrenoHoyBanner() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -396,7 +394,6 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          // Barra de progreso del plan
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -429,7 +426,6 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
-  // ── Botón empezar sesión ──────────────────────────────────────────────────
   Widget _buildStartSessionButton() {
     return Container(
       height: 56,
@@ -489,7 +485,6 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
-  // ── Lista principal ───────────────────────────────────────────────────────
   Widget _buildBody() {
     final tipo  = _plan?['tipo_entrenamiento'] ?? 'Entrenamiento';
     final nivel = _plan?['nivel']              ?? '';
@@ -501,8 +496,6 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
         children: [
-          // Progreso del plan
-          
           Row(
             children: [
               Container(
@@ -561,62 +554,16 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
-  // ── Progreso del plan ─────────────────────────────────────────────────────
-  Widget _buildProgresoPlam() {
-    final porcentaje = _sesionesTotales > 0
-        ? _sesionesCompletadas / _sesionesTotales
-        : 0.0;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _kCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Progreso del plan',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              Text(
-                '$_sesionesCompletadas / $_sesionesTotales sesiones',
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: porcentaje,
-              backgroundColor: Colors.white12,
-              color: _kRed,
-              minHeight: 6,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── Tile de ejercicio ─────────────────────────────────────────────────────
+  // ── Tile de ejercicio con imagen ──────────────────────────────────────────
   Widget _buildEjercicioTile(dynamic ejercicio, int index) {
-    final nombre = ejercicio['nombre']       ?? 'Ejercicio';
-    final series = ejercicio['series']       ?? 0;
-    final reps   = ejercicio['repeticiones'] ?? 0;
+    final nombre    = ejercicio['nombre']        ?? 'Ejercicio';
+    final series    = ejercicio['series']        ?? 0;
+    final reps      = ejercicio['repeticiones']  ?? 0;
+    final grupo     = ejercicio['grupo_muscular'] ?? '';
+    final imagenUrl = ejercicio['imagen_url']?.toString() ?? '';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: _kCard,
         borderRadius: BorderRadius.circular(16),
@@ -624,60 +571,89 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
       ),
       child: Row(
         children: [
-          Container(
-            width: 72,
-            height: 80,
-            margin: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.grey[850],
-              borderRadius: BorderRadius.circular(12),
+          // ── Imagen o ícono ──────────────────────────────────────────────
+          ClipRRect(
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              bottomLeft: Radius.circular(16),
             ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                const Icon(Icons.fitness_center_rounded,
-                    color: Colors.white24, size: 30),
-                Positioned(
-                  top: 4,
-                  left: 6,
-                  child: Text(
-                    '${index + 1}',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.2),
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
+            child: SizedBox(
+              width: 90,
+              height: 90,
+              child: imagenUrl.isNotEmpty && !kIsWeb
+                  ? Image.network(
+                      imagenUrl,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (_, child, progress) {
+                        if (progress == null) return child;
+                        return Container(
+                          color: Colors.grey[850],
+                          child: Center(
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                color: _kRed,
+                                strokeWidth: 2,
+                                value: progress.expectedTotalBytes != null
+                                    ? progress.cumulativeBytesLoaded /
+                                        progress.expectedTotalBytes!
+                                    : null,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => _buildImagePlaceholder(index),
+                    )
+                  : _buildImagePlaceholder(index),
             ),
           ),
+
+          // ── Info del ejercicio ──────────────────────────────────────────
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 4),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '$series sets × $reps reps',
-                    style: TextStyle(
-                        color: Colors.white.withOpacity(0.4), fontSize: 12),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
                     nombre.toString(),
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 15,
+                      fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  if (grupo.toString().isNotEmpty)
+                    Text(
+                      grupo.toString(),
+                      style: TextStyle(
+                        color: _kRed.withOpacity(0.8),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      _badgeStat('$series sets'),
+                      const SizedBox(width: 6),
+                      _badgeStat('$reps reps'),
+                    ],
                   ),
                 ],
               ),
             ),
           ),
+
           Padding(
-            padding: const EdgeInsets.only(right: 14),
+            padding: const EdgeInsets.only(right: 12),
             child: Icon(Icons.chevron_right_rounded,
                 color: Colors.white.withOpacity(0.2), size: 20),
           ),
@@ -686,7 +662,51 @@ class _TrainingPlanScreenState extends State<TrainingPlanScreen> {
     );
   }
 
-  // ── Pantalla de error ─────────────────────────────────────────────────────
+  Widget _buildImagePlaceholder(int index) {
+    return Container(
+      width: 90,
+      height: 90,
+      color: Colors.grey[850],
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          const Icon(Icons.fitness_center_rounded,
+              color: Colors.white24, size: 28),
+          Positioned(
+            top: 6,
+            left: 8,
+            child: Text(
+              '${index + 1}',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.25),
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _badgeStat(String texto) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        texto,
+        style: const TextStyle(
+          color: Colors.white54,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
   Widget _buildError() {
     final sinPlan = _error!.contains('plan');
 

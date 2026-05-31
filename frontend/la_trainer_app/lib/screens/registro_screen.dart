@@ -83,7 +83,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
   bool get _hasMinLength => _pass1Ctrl.text.length >= 8;
   bool get _hasUppercase => _pass1Ctrl.text.contains(RegExp(r'[A-Z]'));
   bool get _hasLowercase => _pass1Ctrl.text.contains(RegExp(r'[a-z]'));
-  bool get _hasNumber    => _pass1Ctrl.text.contains(RegExp(r'[0-9]'));
+  bool get _hasNumber => RegExp(r'[0-9]').allMatches(_pass1Ctrl.text).length >= 4;
   bool get _hasSpecial   => _pass1Ctrl.text.contains(RegExp(r'[!@#\$%^&*(),.?":{}|<>]'));
 
   @override
@@ -449,7 +449,7 @@ class _RegistroScreenState extends State<RegistroScreen> {
     final reqs = [
       (_hasMinLength,                  'Mínimo 8 caracteres'),
       (_hasUppercase && _hasLowercase, 'Mayúscula y minúscula'),
-      (_hasNumber,                     'Al menos un número'),
+      (_hasNumber,                     'Mínimo 4 números'),
       (_hasSpecial,                    'Carácter especial (!@#\$...)'),
     ];
 
