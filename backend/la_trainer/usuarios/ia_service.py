@@ -28,8 +28,7 @@ def _llamar_gemini(prompt, max_reintentos=3):
                     continue
             if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str or 'quota' in error_str.lower():
                 raise Exception(
-                    'El servicio de IA no esta disponible en este momento. '
-                    'Por favor intenta de nuevo mas tarde.'
+                    f'Gemini error 429: {error_str[:300]}'
                 )
             raise
     raise ultimo_error
