@@ -15,6 +15,78 @@ const _cVerdeClaro  = Color(0xFF81C784);
 const _cAzul        = Color(0xFF1976D2);
 
 // ── Mapeo grupos musculares backend → IDs del mapa ────────────────────────────
+//
+// Cada entrada del JSON puede contener varios grupos separados por comas.
+// Se normalizan a minúsculas y se buscan coincidencias parciales.
+//
+const Map<String, List<String>> _kGrupoToMuscleIds = {
+  // ── Frontales ──────────────────────────────────────────────────────────────
+  'cuádriceps':    ['cuadriceps'],
+  'cuadriceps':    ['cuadriceps'],
+  'piernas':       ['cuadriceps', 'gemelos'],
+  'pecho':         ['pectorales'],
+  'pectorales':    ['pectorales'],
+  'hombros':       ['hombros'],
+  'deltoides':     ['hombros'],
+  'bíceps':        ['biceps'],
+  'biceps':        ['biceps'],
+  'abdomen':       ['abdomen'],
+  'core':          ['abdomen', 'oblicuos'],
+  'oblicuos':      ['oblicuos'],
+  'antebrazo':     ['antebrazo'],
+  'aductores':     ['aductores'],
+  'serratos':      ['serratos'],
+  'soleo':         ['soleo'],
+  'sóleo':         ['soleo'],
+  'tibial':        ['tibial_ant'],
+  'trapecio':      ['trapecio_front', 'trapecio_back'],
+  // ── Posteriores ────────────────────────────────────────────────────────────
+  'glúteos':       ['gluteos'],
+  'gluteos':       ['gluteos'],
+  'isquiotibiales':['femorales'],
+  'femorales':     ['femorales'],
+  'gemelos':       ['gemelos'],
+  'dorsales':      ['dorsales'],
+  'espalda':       ['dorsales', 'trapecio_back'],
+  'tríceps':       ['triceps'],
+  'triceps':       ['triceps'],
+  // ── Grupos compuestos ──────────────────────────────────────────────────────
+  'cuerpo completo': [
+    'abdomen', 'cuadriceps', 'pectorales', 'hombros',
+    'gluteos', 'dorsales', 'trapecio_front',
+  ],
+  'cardiovascular': ['cuadriceps', 'gemelos', 'abdomen'],
+};
+
+/// Convierte una cadena de grupos musculares del backend en IDs del mapa SVG.
+/// Ej: "Piernas (Cuádriceps, Glúteos)" → ['cuadriceps', 'gluteos']
+Set<String> _parsearGruposMuscularesAIds(String grupoMuscular) {
+  final resultado = <String>{};
+  final texto = grupoMuscular.toLowerCase();
+
+  // Dividir por comas y paréntesis para extraer cada término
+  final terminos = texto
+      .replaceAll('(', ',')
+      .replaceAll(')', ',')
+      .split(',')
+      .map((t) => t.trim())
+      .where((t) => t.isNotEmpty);
+
+  for (final termino in terminos) {
+    // Buscar coincidencia exacta primero
+    if (_kGrupoToMuscleIds.containsKey(termino)) {
+      resultado.addAll(_kGrupoToMuscleIds[termino]!);
+      continue;
+    }
+    // Luego buscar coincidencia parcial
+    for (final entry in _kGrupoToMuscleIds.entries) {
+      if (termino.contains(entry.key) || entry.key.contains(termino)) {
+        resultado.addAll(entry.value);
+      }
+    }
+  }
+  return resultado;
+}
 
 // ── Músculos disponibles ───────────────────────────────────────────────────────
 class _MuscleGroup {
@@ -229,14 +301,20 @@ class _ProgressScreenState extends State<ProgressScreen> {
   int _rachaActual = 0;
   int _rachaMaxima = 0;
 
-  // IDs de músculos activados manualmente por el usuario
-  final Set<String> _muscActivosFront = {};
-  final Set<String> _muscActivosBack  = {};
+  // Músculos del plan activo (cargados automáticamente desde la API)
+  Set<String> _muscActivosFront = {};
+  Set<String> _muscActivosBack  = {};
+
+  // Datos del plan activo
+  List<Map<String, dynamic>> _ejerciciosHoy = [];
+  bool _loadingPlan = true;
+  String? _nombrePlan;
 
   @override
   void initState() {
     super.initState();
     _cargarDatos();
+    _cargarPlanActivo();
   }
 
   Future<Map<String, String>> get _headers async {
@@ -245,6 +323,59 @@ class _ProgressScreenState extends State<ProgressScreen> {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
     };
+  }
+
+  // ── Carga plan activo y mapea grupos musculares ──────────────────────────
+  Future<void> _cargarPlanActivo() async {
+    setState(() => _loadingPlan = true);
+    try {
+      final h = await _headers;
+      final res = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/api/planes/entrenamiento/activo/'),
+        headers: h,
+      );
+
+      if (!mounted) return;
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final tienePlan = data['tiene_plan_activo'] == true;
+
+        if (!tienePlan) {
+          setState(() { _loadingPlan = false; _ejerciciosHoy = []; });
+          return;
+        }
+
+        final plan = data['plan'] as Map<String, dynamic>;
+        final rutina = (plan['rutina_ejercicios'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
+
+        // Mapear grupos musculares a IDs del SVG
+        final todosLosIds = <String>{};
+        for (final ejercicio in rutina) {
+          final grupo = (ejercicio['grupo_muscular'] ?? '').toString();
+          if (grupo.isNotEmpty) {
+            todosLosIds.addAll(_parsearGruposMuscularesAIds(grupo));
+          }
+        }
+
+        // Separar en frontales y posteriores
+        final frontIds = _kFrontMuscles.map((m) => m.id).toSet();
+        final backIds  = _kBackMuscles.map((m) => m.id).toSet();
+
+        setState(() {
+          _ejerciciosHoy = rutina;
+          _nombrePlan    = plan['tipo_entrenamiento']?.toString();
+          _muscActivosFront = todosLosIds.intersection(frontIds);
+          _muscActivosBack  = todosLosIds.intersection(backIds);
+          _loadingPlan = false;
+        });
+      } else {
+        setState(() { _loadingPlan = false; });
+      }
+    } catch (_) {
+      if (mounted) setState(() { _loadingPlan = false; });
+    }
   }
 
   Future<void> _cargarDatos() async {
@@ -372,9 +503,17 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
-  // ── Mapa muscular con botones toggle ──────────────────────────────────────
+  // ── Mapa muscular automático desde el plan activo ────────────────────────
   Widget _buildMapaMuscular() {
     final totalActivos = _muscActivosFront.length + _muscActivosBack.length;
+
+    // Nombres legibles de los músculos activos
+    final nombresActivos = <String>{
+      for (final m in _kFrontMuscles)
+        if (_muscActivosFront.contains(m.id)) m.displayName,
+      for (final m in _kBackMuscles)
+        if (_muscActivosBack.contains(m.id)) m.displayName,
+    };
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -392,7 +531,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Encabezado ──────────────────────────────────────────────
+          // ── Encabezado ──────────────────────────────────────────────────
           Row(children: [
             const Icon(Icons.accessibility_new_rounded, color: _kRed, size: 22),
             const SizedBox(width: 10),
@@ -400,7 +539,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
               child: Text('Músculos trabajados hoy',
                   style: TextStyle(color: _kDark, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
-            if (totalActivos > 0) ...[
+            if (!_loadingPlan && totalActivos > 0)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -408,150 +547,199 @@ class _ProgressScreenState extends State<ProgressScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '$totalActivos activos',
+                  '$totalActivos grupos',
                   style: const TextStyle(fontSize: 11, color: _kRed, fontWeight: FontWeight.w600),
                 ),
               ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () => setState(() {
-                  _muscActivosFront.clear();
-                  _muscActivosBack.clear();
-                }),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text('Limpiar',
-                      style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)),
-                ),
-              ),
-            ],
           ]),
+
+          // ── Nombre del plan ──────────────────────────────────────────────
+          if (_nombrePlan != null) ...[
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: _kRed.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.fitness_center_rounded, size: 13, color: _kRed),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      _nombrePlan!,
+                      style: const TextStyle(fontSize: 11, color: _kRed, fontWeight: FontWeight.w500),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const Divider(height: 20),
 
-          // ── Mapa visual ──────────────────────────────────────────────
-          MuscleMapWidget(
-            activeFrontMuscles: _muscActivosFront,
-            activeBackMuscles:  _muscActivosBack,
-          ),
-          const SizedBox(height: 20),
+          // ── Estado de carga ──────────────────────────────────────────────
+          if (_loadingPlan)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 32),
+              child: Center(child: CircularProgressIndicator(color: _kRed, strokeWidth: 2)),
+            )
+          else if (_ejerciciosHoy.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: Column(children: [
+                  Icon(Icons.event_busy_rounded, size: 40, color: Colors.grey[300]),
+                  const SizedBox(height: 8),
+                  Text('Sin plan activo',
+                      style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                ]),
+              ),
+            )
+          else ...[
+            // ── Mapa SVG ───────────────────────────────────────────────────
+            MuscleMapWidget(
+              activeFrontMuscles: _muscActivosFront,
+              activeBackMuscles:  _muscActivosBack,
+            ),
+            const SizedBox(height: 20),
 
-          // ── Botones frontales ────────────────────────────────────────
-          _buildMuscleSection(
-            title: 'Vista Frontal',
-            muscles: _kFrontMuscles,
-            activeSet: _muscActivosFront,
-            onToggle: (id) => setState(() {
-              _muscActivosFront.contains(id)
-                  ? _muscActivosFront.remove(id)
-                  : _muscActivosFront.add(id);
-            }),
-          ),
-          const SizedBox(height: 14),
+            // ── Chips de músculos activados ────────────────────────────────
+            if (nombresActivos.isNotEmpty) ...[
+              const Text('Grupos activados',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kDark)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: nombresActivos.map((nombre) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _kRed.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _kRed.withValues(alpha: 0.4), width: 1),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 7, height: 7,
+                        decoration: const BoxDecoration(color: _kRed, shape: BoxShape.circle),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(nombre,
+                          style: const TextStyle(
+                              fontSize: 12, color: _kRed, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                )).toList(),
+              ),
+              const SizedBox(height: 16),
+            ],
 
-          // ── Botones posteriores ──────────────────────────────────────
-          _buildMuscleSection(
-            title: 'Vista Posterior',
-            muscles: _kBackMuscles,
-            activeSet: _muscActivosBack,
-            onToggle: (id) => setState(() {
-              _muscActivosBack.contains(id)
-                  ? _muscActivosBack.remove(id)
-                  : _muscActivosBack.add(id);
-            }),
-          ),
+            // ── Lista de ejercicios del plan ────────────────────────────────
+            const Text('Ejercicios del plan',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kDark)),
+            const SizedBox(height: 10),
+            ..._ejerciciosHoy.map((ej) => _buildEjercicioTile(ej)),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildMuscleSection({
-    required String title,
-    required List<_MuscleGroup> muscles,
-    required Set<String> activeSet,
-    required void Function(String id) onToggle,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kDark),
+  Widget _buildEjercicioTile(Map<String, dynamic> ej) {
+    final nombre  = (ej['nombre']         ?? '').toString();
+    final grupo   = (ej['grupo_muscular'] ?? '').toString();
+    final series  = ej['series'];
+    final reps    = ej['repeticiones'];
+    final imagen  = ej['imagen_url']?.toString();
+
+    // IDs activados por este ejercicio
+    final idsEj = grupo.isNotEmpty ? _parsearGruposMuscularesAIds(grupo) : <String>{};
+    final frontIds = _kFrontMuscles.map((m) => m.id).toSet();
+    final backIds  = _kBackMuscles.map((m) => m.id).toSet();
+    final tieneMuscs = idsEj.intersection(frontIds..addAll(backIds)).isNotEmpty;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFEEEEEE)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Imagen o placeholder
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: imagen != null && imagen.isNotEmpty
+                ? Image.network(
+                    imagen,
+                    width: 52, height: 52, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _musclePlaceholder(),
+                  )
+                : _musclePlaceholder(),
           ),
-          const SizedBox(width: 8),
-          if (activeSet.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: _kRed.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                '${activeSet.length} activo${activeSet.length != 1 ? 's' : ''}',
-                style: const TextStyle(fontSize: 10, color: _kRed, fontWeight: FontWeight.w600),
-              ),
-            ),
-        ]),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: muscles.map((muscle) {
-            final isActive = activeSet.contains(muscle.id);
-            return GestureDetector(
-              onTap: () => onToggle(muscle.id),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? _kRed.withValues(alpha: 0.12)
-                      : Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isActive ? _kRed : Colors.grey.shade300,
-                    width: 1.5,
-                  ),
-                  boxShadow: isActive
-                      ? [BoxShadow(color: _kRed.withValues(alpha: 0.25), blurRadius: 6, offset: const Offset(0, 2))]
-                      : null,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: isActive ? _kRed : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: isActive ? _kRed : Colors.grey.shade400,
-                          width: 1.2,
-                        ),
-                      ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(nombre,
+                    style: const TextStyle(
+                        fontSize: 13, fontWeight: FontWeight.w600, color: _kDark),
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
+                // Grupo muscular como chip pequeño
+                if (grupo.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: tieneMuscs
+                          ? _kRed.withValues(alpha: 0.08)
+                          : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(6),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      muscle.displayName,
+                    child: Text(
+                      grupo,
                       style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                        color: isActive ? _kRed : Colors.grey.shade600,
-                      ),
+                          fontSize: 10,
+                          color: tieneMuscs ? _kRed : Colors.grey,
+                          fontWeight: FontWeight.w500),
                     ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
+                  ),
+              ],
+            ),
+          ),
+          // Series × Reps
+          if (series != null || reps != null)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (series != null)
+                  Text('$series series',
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.bold, color: _kRed)),
+                if (reps != null)
+                  Text('$reps reps',
+                      style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _musclePlaceholder() {
+    return Container(
+      width: 52, height: 52,
+      color: _kRed.withValues(alpha: 0.08),
+      child: const Icon(Icons.fitness_center_rounded, color: _kRed, size: 22),
     );
   }
 
