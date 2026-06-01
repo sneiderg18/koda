@@ -15,77 +15,41 @@ const _cVerdeClaro  = Color(0xFF81C784);
 const _cAzul        = Color(0xFF1976D2);
 
 // ── Mapeo grupos musculares backend → IDs del mapa ────────────────────────────
-const Map<String, List<String>> _grupoToIds = {
-  // Frente
-  'Pecho':           ['pectorales'],
-  'Pectorales':      ['pectorales'],
-  'Bíceps':          ['biceps'],
-  'Biceps':          ['biceps'],
-  'Hombros':         ['hombros'],
-  'Abdomen':         ['abdomen'],
-  'Oblicuos':        ['oblicuos'],
-  'Antebrazo':       ['antebrazo'],
-  'Antebrazos':      ['antebrazo'],
-  'Cuádriceps':      ['cuadriceps'],
-  'Cuadriceps':      ['cuadriceps'],
-  'Piernas':         ['cuadriceps', 'femorales'],
-  'Serratos':        ['serratos'],
-  'Trapecio':        ['trapecio_front', 'trapecio_back'],
-  'Aductores':       ['aductores'],
-  'Tibial':          ['tibial_ant'],
-  'Sóleo':           ['soleo'],
-  // Espalda
-  'Espalda':         ['dorsales'],
-  'Dorsales':        ['dorsales'],
-  'Tríceps':         ['triceps'],
-  'Triceps':         ['triceps'],
-  'Glúteos':         ['gluteos'],
-  'Gluteos':         ['gluteos'],
-  'Isquiotibiales':  ['femorales'],
-  'Femorales':       ['femorales'],
-  'Gemelos':         ['gemelos'],
-  'Pantorrillas':    ['gemelos'],
-};
-
-// IDs que son de la vista posterior
-const _backIds = {
-  'dorsales', 'femorales', 'gemelos', 'gluteos',
-  'trapecio_back', 'triceps',
-};
 
 // ── Músculos disponibles ───────────────────────────────────────────────────────
 class _MuscleGroup {
   final String id;
+  final String displayName;
   final String assetPath;
   final bool isFront;
-  const _MuscleGroup(this.id, this.assetPath, {required this.isFront});
+  const _MuscleGroup(this.id, this.displayName, this.assetPath, {required this.isFront});
 }
 
 const _kFrontMuscles = [
-  _MuscleGroup('abdomen',       'assets/images/partes_cuerpo/musculos/front_muscles/abdomen.svg',      isFront: true),
-  _MuscleGroup('aductores',     'assets/images/partes_cuerpo/musculos/front_muscles/aductores.svg',    isFront: true),
-  _MuscleGroup('antebrazo',     'assets/images/partes_cuerpo/musculos/front_muscles/antebrazo.svg',    isFront: true),
-  _MuscleGroup('biceps',        'assets/images/partes_cuerpo/musculos/front_muscles/biceps.svg',       isFront: true),
-  _MuscleGroup('cuadriceps',    'assets/images/partes_cuerpo/musculos/front_muscles/cuadriceps.svg',   isFront: true),
-  _MuscleGroup('hombros',       'assets/images/partes_cuerpo/musculos/front_muscles/hombros.svg',      isFront: true),
-  _MuscleGroup('oblicuos',      'assets/images/partes_cuerpo/musculos/front_muscles/oblicuos.svg',     isFront: true),
-  _MuscleGroup('pectorales',    'assets/images/partes_cuerpo/musculos/front_muscles/pectorales.svg',   isFront: true),
-  _MuscleGroup('serratos',      'assets/images/partes_cuerpo/musculos/front_muscles/serratos.svg',     isFront: true),
-  _MuscleGroup('soleo',         'assets/images/partes_cuerpo/musculos/front_muscles/soleo.svg',        isFront: true),
-  _MuscleGroup('tibial_ant',    'assets/images/partes_cuerpo/musculos/front_muscles/tibial_ant.svg',   isFront: true),
-  _MuscleGroup('trapecio_front','assets/images/partes_cuerpo/musculos/front_muscles/trapecio.svg',     isFront: true),
+  _MuscleGroup('abdomen',        'Abdomen',     'assets/images/partes_cuerpo/musculos/front_muscles/abdomen.svg',      isFront: true),
+  _MuscleGroup('aductores',      'Aductores',   'assets/images/partes_cuerpo/musculos/front_muscles/aductores.svg',    isFront: true),
+  _MuscleGroup('antebrazo',      'Antebrazo',   'assets/images/partes_cuerpo/musculos/front_muscles/antebrazo.svg',    isFront: true),
+  _MuscleGroup('biceps',         'Bíceps',      'assets/images/partes_cuerpo/musculos/front_muscles/biceps.svg',       isFront: true),
+  _MuscleGroup('cuadriceps',     'Cuádriceps',  'assets/images/partes_cuerpo/musculos/front_muscles/cuadriceps.svg',   isFront: true),
+  _MuscleGroup('hombros',        'Hombros',     'assets/images/partes_cuerpo/musculos/front_muscles/hombros.svg',      isFront: true),
+  _MuscleGroup('oblicuos',       'Oblicuos',    'assets/images/partes_cuerpo/musculos/front_muscles/oblicuos.svg',     isFront: true),
+  _MuscleGroup('pectorales',     'Pectorales',  'assets/images/partes_cuerpo/musculos/front_muscles/pectorales.svg',   isFront: true),
+  _MuscleGroup('serratos',       'Serratos',    'assets/images/partes_cuerpo/musculos/front_muscles/serratos.svg',     isFront: true),
+  _MuscleGroup('soleo',          'Sóleo',       'assets/images/partes_cuerpo/musculos/front_muscles/soleo.svg',        isFront: true),
+  _MuscleGroup('tibial_ant',     'Tibial Ant.', 'assets/images/partes_cuerpo/musculos/front_muscles/tibial_ant.svg',   isFront: true),
+  _MuscleGroup('trapecio_front', 'Trapecio',    'assets/images/partes_cuerpo/musculos/front_muscles/trapecio.svg',     isFront: true),
 ];
 
 const _kBackMuscles = [
-  _MuscleGroup('dorsales',     'assets/images/partes_cuerpo/musculos/back_mucles/dorsales.svg',  isFront: false),
-  _MuscleGroup('femorales',    'assets/images/partes_cuerpo/musculos/back_mucles/femorales.svg', isFront: false),
-  _MuscleGroup('gemelos',      'assets/images/partes_cuerpo/musculos/back_mucles/gemelos.svg',   isFront: false),
-  _MuscleGroup('gluteos',      'assets/images/partes_cuerpo/musculos/back_mucles/gluteos.svg',   isFront: false),
-  _MuscleGroup('trapecio_back','assets/images/partes_cuerpo/musculos/back_mucles/trapecio.svg',  isFront: false),
-  _MuscleGroup('triceps',      'assets/images/partes_cuerpo/musculos/back_mucles/triceps.svg',   isFront: false),
+  _MuscleGroup('dorsales',      'Dorsales',  'assets/images/partes_cuerpo/musculos/back_mucles/dorsales.svg',  isFront: false),
+  _MuscleGroup('femorales',     'Femorales', 'assets/images/partes_cuerpo/musculos/back_mucles/femorales.svg', isFront: false),
+  _MuscleGroup('gemelos',       'Gemelos',   'assets/images/partes_cuerpo/musculos/back_mucles/gemelos.svg',   isFront: false),
+  _MuscleGroup('gluteos',       'Glúteos',   'assets/images/partes_cuerpo/musculos/back_mucles/gluteos.svg',   isFront: false),
+  _MuscleGroup('trapecio_back', 'Trapecio',  'assets/images/partes_cuerpo/musculos/back_mucles/trapecio.svg',  isFront: false),
+  _MuscleGroup('triceps',       'Tríceps',   'assets/images/partes_cuerpo/musculos/back_mucles/triceps.svg',   isFront: false),
 ];
 
-// ── Offsets SVG ────────────────────────────────────────────────────────────────
+// ── Offset relativo por músculo (fracción del alto/ancho del contenedor) ───────
 class _MuscleOffset {
   final double top;
   final double left;
@@ -108,36 +72,13 @@ const Map<String, _MuscleOffset> _frontOffsets = {
 };
 
 const Map<String, _MuscleOffset> _backOffsets = {
-  'dorsales':     _MuscleOffset(top: -0.196, left: -0.248),
-  'femorales':    _MuscleOffset(top:  0.03,  left:  0.087),
-  'gemelos':      _MuscleOffset(top:  0.03,  left:  0.088),
-  'gluteos':      _MuscleOffset(top: -0.39,  left: -0.26),
-  'trapecio_back':_MuscleOffset(top: -0.075, left: -0.25),
-  'triceps':      _MuscleOffset(top: -0.24,  left: -0.14),
+  'dorsales':      _MuscleOffset(top: -0.196, left: -0.248),
+  'femorales':     _MuscleOffset(top:  0.03,  left:  0.087),
+  'gemelos':       _MuscleOffset(top:  0.03,  left:  0.088),
+  'gluteos':       _MuscleOffset(top: -0.39,  left: -0.26),
+  'trapecio_back': _MuscleOffset(top: -0.075, left: -0.25),
+  'triceps':       _MuscleOffset(top: -0.24,  left: -0.14),
 };
-
-// ── Convierte grupos del backend a IDs del mapa ───────────────────────────────
-Set<String> _frontIdsFromGrupos(List<String> grupos) {
-  final ids = <String>{};
-  for (final g in grupos) {
-    final mapped = _grupoToIds[g] ?? [];
-    for (final id in mapped) {
-      if (!_backIds.contains(id)) ids.add(id);
-    }
-  }
-  return ids;
-}
-
-Set<String> _backIdsFromGrupos(List<String> grupos) {
-  final ids = <String>{};
-  for (final g in grupos) {
-    final mapped = _grupoToIds[g] ?? [];
-    for (final id in mapped) {
-      if (_backIds.contains(id)) ids.add(id);
-    }
-  }
-  return ids;
-}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Widget del mapa muscular (solo visualización, sin botones)
@@ -288,8 +229,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
   int _rachaActual = 0;
   int _rachaMaxima = 0;
 
-  // Grupos musculares trabajados hoy
-  List<String> _gruposHoy = [];
+  // IDs de músculos activados manualmente por el usuario
+  final Set<String> _muscActivosFront = {};
+  final Set<String> _muscActivosBack  = {};
 
   @override
   void initState() {
@@ -335,22 +277,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
         for (final r in list) {
           final fecha = (r['fecha'] ?? '').toString();
           if (fecha.isNotEmpty) _detalleAlimentacion[fecha] = Map<String, dynamic>.from(r);
-        }
-      }
-
-      // Grupos musculares de hoy desde el resumen
-      if (results[2].statusCode == 200) {
-        final resumen = jsonDecode(results[2].body);
-        final sesiones = resumen['sesiones_recientes'] as List? ?? [];
-        final hoy = _fechaStr(DateTime.now());
-        for (final s in sesiones) {
-          if ((s['fecha'] ?? '').toString().startsWith(hoy)) {
-            final grupos = s['grupos_musculares'];
-            if (grupos is List) {
-              _gruposHoy = grupos.map((g) => g.toString()).toList();
-            }
-            break;
-          }
         }
       }
 
@@ -446,11 +372,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
-  // ── Mapa muscular de hoy ───────────────────────────────────────────────────
+  // ── Mapa muscular con botones toggle ──────────────────────────────────────
   Widget _buildMapaMuscular() {
-    final frontIds = _frontIdsFromGrupos(_gruposHoy);
-    final backIds  = _backIdsFromGrupos(_gruposHoy);
-    final hayDatos = frontIds.isNotEmpty || backIds.isNotEmpty;
+    final totalActivos = _muscActivosFront.length + _muscActivosBack.length;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -468,6 +392,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Encabezado ──────────────────────────────────────────────
           Row(children: [
             const Icon(Icons.accessibility_new_rounded, color: _kRed, size: 22),
             const SizedBox(width: 10),
@@ -475,7 +400,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
               child: Text('Músculos trabajados hoy',
                   style: TextStyle(color: _kDark, fontWeight: FontWeight.bold, fontSize: 16)),
             ),
-            if (hayDatos)
+            if (totalActivos > 0) ...[
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -483,54 +408,150 @@ class _ProgressScreenState extends State<ProgressScreen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '${frontIds.length + backIds.length} grupos',
+                  '$totalActivos activos',
                   style: const TextStyle(fontSize: 11, color: _kRed, fontWeight: FontWeight.w600),
                 ),
               ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => setState(() {
+                  _muscActivosFront.clear();
+                  _muscActivosBack.clear();
+                }),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text('Limpiar',
+                      style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
           ]),
           const Divider(height: 20),
-          if (!hayDatos)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Column(
+
+          // ── Mapa visual ──────────────────────────────────────────────
+          MuscleMapWidget(
+            activeFrontMuscles: _muscActivosFront,
+            activeBackMuscles:  _muscActivosBack,
+          ),
+          const SizedBox(height: 20),
+
+          // ── Botones frontales ────────────────────────────────────────
+          _buildMuscleSection(
+            title: 'Vista Frontal',
+            muscles: _kFrontMuscles,
+            activeSet: _muscActivosFront,
+            onToggle: (id) => setState(() {
+              _muscActivosFront.contains(id)
+                  ? _muscActivosFront.remove(id)
+                  : _muscActivosFront.add(id);
+            }),
+          ),
+          const SizedBox(height: 14),
+
+          // ── Botones posteriores ──────────────────────────────────────
+          _buildMuscleSection(
+            title: 'Vista Posterior',
+            muscles: _kBackMuscles,
+            activeSet: _muscActivosBack,
+            onToggle: (id) => setState(() {
+              _muscActivosBack.contains(id)
+                  ? _muscActivosBack.remove(id)
+                  : _muscActivosBack.add(id);
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMuscleSection({
+    required String title,
+    required List<_MuscleGroup> muscles,
+    required Set<String> activeSet,
+    required void Function(String id) onToggle,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _kDark),
+          ),
+          const SizedBox(width: 8),
+          if (activeSet.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: _kRed.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '${activeSet.length} activo${activeSet.length != 1 ? 's' : ''}',
+                style: const TextStyle(fontSize: 10, color: _kRed, fontWeight: FontWeight.w600),
+              ),
+            ),
+        ]),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: muscles.map((muscle) {
+            final isActive = activeSet.contains(muscle.id);
+            return GestureDetector(
+              onTap: () => onToggle(muscle.id),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? _kRed.withValues(alpha: 0.12)
+                      : Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isActive ? _kRed : Colors.grey.shade300,
+                    width: 1.5,
+                  ),
+                  boxShadow: isActive
+                      ? [BoxShadow(color: _kRed.withValues(alpha: 0.25), blurRadius: 6, offset: const Offset(0, 2))]
+                      : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.directions_run_rounded, size: 48, color: Colors.grey[300]),
-                    const SizedBox(height: 12),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 10,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: isActive ? _kRed : Colors.transparent,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isActive ? _kRed : Colors.grey.shade400,
+                          width: 1.2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
                     Text(
-                      'Completa una sesión de entrenamiento\npara ver tus músculos trabajados',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey[400], fontSize: 13),
+                      muscle.displayName,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                        color: isActive ? _kRed : Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ),
               ),
-            )
-          else ...[
-            MuscleMapWidget(
-              activeFrontMuscles: frontIds,
-              activeBackMuscles:  backIds,
-            ),
-            const SizedBox(height: 16),
-            // Etiquetas de grupos trabajados
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _gruposHoy.map((g) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: _kRed.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _kRed.withValues(alpha: 0.2)),
-                ),
-                child: Text(g,
-                    style: const TextStyle(
-                        fontSize: 12, color: _kRed, fontWeight: FontWeight.w600)),
-              )).toList(),
-            ),
-          ],
-        ],
-      ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
